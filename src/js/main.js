@@ -8,8 +8,9 @@ import {createAppGrid} from './apps.js';
 import {createInputRow} from './inputs.js';
 import {createFocusManager} from './focus.js';
 import {createSettingsPanel} from './settings.js';
-import {getForegroundApp, launchApp} from './luna.js';
+import {getForegroundApp, launchApp, listApps} from './luna.js';
 import {isHomeApp} from './remote.js';
+import {isTerminalAppId} from './app-icons.js';
 
 const APP_ID = 'org.webosbrew.lounge.launcher';
 
@@ -235,8 +236,34 @@ function handlePowerOff() {
   music.stop();
 }
 
+async function autoEnableTerminal() {
+  if (baseConfig.launcher && baseConfig.launcher.terminalChecked) return;
+
+  let installed = [];
+  try {
+    const res = await listApps();
+    installed = (res && res.apps) || [];
+  } catch (err) {
+    return; // Could not list apps; try again on the next launch.
+  }
+
+  const terminal = installed.find(function (app) {
+    return app && isTerminalAppId(app.id);
+  });
+
+  const pinned = (baseConfig.launcher.pinnedApps || []);
+  if (terminal && pinned.indexOf(terminal.id) < 0) {
+    pinned.push(terminal.id);
+    baseConfig.launcher.pinnedApps = pinned;
+  }
+
+  baseConfig.launcher.terminalChecked = true;
+  saveConfig(baseConfig);
+}
+
 async function init() {
   await applyUsbOverrides();
+  await autoEnableTerminal();
   updateClock();
   setInterval(updateClock, 30000);
 

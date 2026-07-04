@@ -23,7 +23,9 @@ const BUILTIN_APP_ICONS = {
   'com.channel5.my5': 'assets/app-icons/channel5.png',
   'my5': 'assets/app-icons/channel5.png',
   'com.disney.disneyplus': 'assets/app-icons/disney-plus.png',
-  'disneyplus': 'assets/app-icons/disney-plus.png'
+  'disneyplus': 'assets/app-icons/disney-plus.png',
+  'com.webosbrew.terminal': 'assets/app-icons/terminal.png',
+  'com.webos.app.terminal': 'assets/app-icons/terminal.png'
 };
 
 const BUILTIN_APP_TITLES = {
@@ -51,7 +53,9 @@ const BUILTIN_APP_TITLES = {
   'com.channel5.my5': 'Channel 5',
   'my5': 'Channel 5',
   'com.disney.disneyplus': 'Disney+',
-  'disneyplus': 'Disney+'
+  'disneyplus': 'Disney+',
+  'com.webosbrew.terminal': 'Terminal',
+  'com.webos.app.terminal': 'Terminal'
 };
 
 /** Same app, different IDs across webOS 6 vs current TVs. */
@@ -90,6 +94,7 @@ export function getBuiltinAppIcon(id) {
   for (let i = 0; i < candidates.length; i += 1) {
     if (BUILTIN_APP_ICONS[candidates[i]]) return BUILTIN_APP_ICONS[candidates[i]];
   }
+  if (id && /terminal/i.test(id)) return 'assets/app-icons/terminal.png';
   return '';
 }
 
@@ -98,7 +103,13 @@ export function getBuiltinAppTitle(id) {
   for (let i = 0; i < candidates.length; i += 1) {
     if (BUILTIN_APP_TITLES[candidates[i]]) return BUILTIN_APP_TITLES[candidates[i]];
   }
+  if (id && /terminal/i.test(id)) return 'Terminal';
   return '';
+}
+
+/** True when an app id looks like a terminal / shell app. */
+export function isTerminalAppId(id) {
+  return !!id && /terminal/i.test(id);
 }
 
 /** Curated apps we ship icons for, so they can always be added from settings. */
