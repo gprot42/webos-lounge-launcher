@@ -129,7 +129,7 @@ export function createSettingsPanel(panel, getConfig, options) {
   }
 
   function labeledControl(label, control) {
-    const wrap = document.createElement('label');
+    const wrap = document.createElement('div');
     wrap.className = 'settings-row';
     const span = document.createElement('span');
     span.textContent = label;
