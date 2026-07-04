@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+
+const esbuild = require('esbuild');
+const fs = require('fs');
+const path = require('path');
+const {execSync} = require('child_process');
+
+const {readVersion} = require('./read-version');
+
+const root = path.join(__dirname, '..');
+const dist = path.join(root, 'dist');
+
+function copyRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(dest, {recursive: true});
+    for (const entry of fs.readdirSync(src)) {
+      copyRecursive(path.join(src, entry), path.join(dest, entry));
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(dest), {recursive: true});
+  fs.copyFileSync(src, dest);
+}
+
+async function build() {
+  const version = readVersion();
+
+  fs.rmSync(dist, {recursive: true, force: true});
+  fs.mkdirSync(dist, {recursive: true});
+
+  await esbuild.build({
+    entryPoints: [path.join(root, 'src/js/main.js')],
+    outfile: path.join(dist, 'main.js'),
+    bundle: true,
+    format: 'iife',
+    target: ['es2015'],
+    minify: true,
+    legalComments: 'none',
+    define: {
+      __LOUNGE_VERSION__: JSON.stringify(version)
+    }
+  });
+
+  copyRecursive(path.join(root, 'src/index.html'), path.join(dist, 'index.html'));
+  copyRecursive(path.join(root, 'src/styles'), path.join(dist, 'styles'));
+  copyRecursive(path.join(root, 'assets'), path.join(dist, 'assets'));
+  fs.copyFileSync(path.join(root, 'version.md'), path.join(dist, 'version.md'));
+
+  const appinfo = JSON.parse(fs.readFileSync(path.join(root, 'appinfo.json'), 'utf8'));
+  appinfo.version = version;
+  fs.writeFileSync(path.join(dist, 'appinfo.json'), JSON.stringify(appinfo, null, 2) + '\n');
+
+  const webosLib = path.join(root, 'node_modules/@procot/webostv/webOSTV/index.js');
+  if (!fs.existsSync(webosLib)) {
+    throw new Error('Missing @procot/webostv — run npm install');
+  }
+  fs.copyFileSync(webosLib, path.join(dist, 'webOS.js'));
+
+  console.log('Built dist/');
+}
+
+async function main() {
+  await build();
+
+  if (process.argv.includes('--pack')) {
+    execSync('ares-package --no-minify .', {cwd: dist, stdio: 'inherit'});
+    console.log('Packaged IPK in dist/');
+  }
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

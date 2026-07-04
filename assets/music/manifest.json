@@ -1,0 +1,47 @@
+{
+  "license": "CC0 1.0 / Public Domain (FreePD.com & Pixabay via SoundSafari/CC0-1.0-Music)",
+  "tracks": [
+    {
+      "id": "midnight-lounge",
+      "title": "Midnight Lounge",
+      "artist": "Ambient",
+      "file": "midnight-lounge.mp3",
+      "description": "Late-night city calm"
+    },
+    {
+      "id": "starlight-drift",
+      "title": "Starlight Drift",
+      "artist": "Ambient",
+      "file": "starlight-drift.mp3",
+      "description": "Ethereal floating pads"
+    },
+    {
+      "id": "ocean-haze",
+      "title": "Ocean Haze",
+      "artist": "Ambient",
+      "file": "ocean-haze.mp3",
+      "description": "Deep underwater glow"
+    },
+    {
+      "id": "warm-glow",
+      "title": "Warm Glow",
+      "artist": "Ambient",
+      "file": "warm-glow.mp3",
+      "description": "Soft golden atmosphere"
+    },
+    {
+      "id": "unknown-realm",
+      "title": "Unknown Realm",
+      "artist": "Ambient",
+      "file": "unknown-realm.mp3",
+      "description": "Mysterious slow drift"
+    },
+    {
+      "id": "forest-night",
+      "title": "Forest Night",
+      "artist": "Ambient",
+      "file": "forest-night.mp3",
+      "description": "Quiet woodland after dark"
+    }
+  ]
+}

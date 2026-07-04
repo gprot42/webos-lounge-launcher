@@ -1,0 +1,176 @@
+function hasWebOS() {
+  return typeof window !== 'undefined' && window.webOS && window.webOS.service;
+}
+
+export function lunaRequest(uri, options) {
+  const method = options.method;
+  const parameters = options.parameters || {};
+
+  return new Promise(function (resolve, reject) {
+    if (!hasWebOS()) {
+      reject(new Error('webOS Luna bus unavailable'));
+      return;
+    }
+
+    window.webOS.service.request(uri, {
+      method: method,
+      parameters: parameters,
+      onSuccess: function (res) {
+        if (res && res.returnValue === false) {
+          reject(new Error(res.errorText || 'Luna call failed'));
+          return;
+        }
+        resolve(res || {});
+      },
+      onFailure: function (err) {
+        reject(err || new Error('Luna call failed'));
+      }
+    });
+  });
+}
+
+function tryLunaRequest(uri, options) {
+  return lunaRequest(uri, options).catch(function () {
+    return null;
+  });
+}
+
+export function launchApp(id) {
+  return lunaRequest('luna://com.webos.applicationManager', {
+    method: 'launch',
+    parameters: {id: id, params: {}}
+  });
+}
+
+export function getAppInfo(id) {
+  return lunaRequest('luna://com.webos.applicationManager', {
+    method: 'getAppInfo',
+    parameters: {id: id}
+  });
+}
+
+function normalizeListedApps(res) {
+  if (!res) return {apps: []};
+
+  if (Array.isArray(res.apps) && res.apps.length) {
+    return {apps: res.apps};
+  }
+
+  if (Array.isArray(res.launchPoints)) {
+    return {
+      apps: res.launchPoints.map(function (point) {
+        return {
+          id: point.id,
+          appInfo: point
+        };
+      })
+    };
+  }
+
+  return {apps: []};
+}
+
+export function listApps() {
+  return lunaRequest('luna://com.webos.applicationManager', {
+    method: 'listApps',
+    parameters: {}
+  }).then(normalizeListedApps).catch(function () {
+    return lunaRequest('luna://com.webos.applicationManager', {
+      method: 'listLaunchPoints',
+      parameters: {}
+    }).then(normalizeListedApps);
+  });
+}
+
+export function getForegroundApp() {
+  return lunaRequest('luna://com.webos.applicationManager', {
+    method: 'getForegroundApp',
+    parameters: {}
+  }).catch(function () {
+    return lunaRequest('luna://com.webos.applicationManager', {
+      method: 'getForegroundAppInfo',
+      parameters: {}
+    });
+  });
+}
+
+export function getAllInputStatus() {
+  return lunaRequest('luna://com.webos.service.eim', {
+    method: 'getAllInputStatus',
+    parameters: {subscribe: false}
+  });
+}
+
+export function getInputStatus(inputId) {
+  return lunaRequest('luna://com.webos.service.eim', {
+    method: 'getInputStatus',
+    parameters: {id: inputId}
+  });
+}
+
+function switchInputViaApiAdapter(inputId) {
+  return lunaRequest('luna://com.webos.service.apiadapter/tv', {
+    method: 'switchInput',
+    parameters: {inputId: inputId}
+  });
+}
+
+function switchInputViaEim(inputId) {
+  return getInputStatus(inputId).then(function (status) {
+    if (status && status.appId) {
+      return launchApp(status.appId);
+    }
+    throw new Error('Input has no launchable app');
+  });
+}
+
+function switchInputViaExtinputs(inputId) {
+  const hdmiMatch = inputId.match(/^HDMI_(\d+)$/i);
+  if (!hdmiMatch) {
+    return Promise.reject(new Error('extinputs only supports HDMI inputs'));
+  }
+
+  const mediaId = hdmiMatch[1];
+
+  return lunaRequest('luna://com.webos.service.utp.extinputs', {
+    method: 'open',
+    parameters: {
+      inputSourceType: 'HDMI',
+      options: {mediaId: mediaId}
+    }
+  }).catch(function () {
+    return lunaRequest('luna://com.webos.service.utp.extinputs', {
+      method: 'open',
+      parameters: {
+        inputSourceType: 'HDMI',
+        inputSource: 'HDMI_' + mediaId
+      }
+    });
+  });
+}
+
+export function switchInput(inputId, device) {
+  if (device && device.appId) {
+    return launchApp(device.appId).catch(function () {
+      return switchInputViaApiAdapter(inputId)
+        .catch(function () { return switchInputViaEim(inputId); })
+        .catch(function () { return switchInputViaExtinputs(inputId); });
+    });
+  }
+
+  return switchInputViaApiAdapter(inputId)
+    .catch(function () { return switchInputViaEim(inputId); })
+    .catch(function () { return switchInputViaExtinputs(inputId); });
+}
+
+export function getStorageDevices() {
+  return lunaRequest('luna://com.webos.service.pdm', {
+    method: 'getAttachedStorageDeviceList',
+    parameters: {subscribe: false}
+  }).catch(function () {
+    return tryLunaRequest('luna://com.webos.service.pdm', {
+      method: 'getDeviceList',
+      parameters: {subscribe: false}
+    });
+  });
+}

@@ -1,0 +1,11 @@
+{
+  "backgrounds": [
+    {"id": "mountain-sunset", "title": "Mountain Sunset", "file": "mountain-sunset.jpg"},
+    {"id": "misty-forest", "title": "Misty Forest", "file": "misty-forest.jpg"},
+    {"id": "ocean-twilight", "title": "Ocean Twilight", "file": "ocean-twilight.jpg"},
+    {"id": "starry-night", "title": "Starry Night", "file": "starry-night.jpg"},
+    {"id": "tropical-beach", "title": "Tropical Beach", "file": "tropical-beach.jpg"},
+    {"id": "alpine-lake", "title": "Alpine Lake", "file": "alpine-lake.jpg"},
+    {"id": "golden-hills", "title": "Golden Hills", "file": "golden-hills.jpg"}
+  ]
+}

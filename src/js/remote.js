@@ -1,0 +1,26 @@
+export const REMOTE_KEY = {
+  LEFT: 37,
+  UP: 38,
+  RIGHT: 39,
+  DOWN: 40,
+  ENTER: 13,
+  BACK: 461,
+  RED: 403,
+  GREEN: 404,
+  YELLOW: 405,
+  BLUE: 406
+};
+
+export const HOME_APP_IDS = [
+  'com.webos.app.home',
+  'com.webos.app.launcher',
+  'com.webos.app.homeupdater',
+  'com.webos.app.dashboard',
+  'com.palm.app.home',
+  'com.webos.app.homelauncher'
+];
+
+export function isHomeApp(appId) {
+  if (!appId) return true;
+  return HOME_APP_IDS.indexOf(appId) >= 0;
+}

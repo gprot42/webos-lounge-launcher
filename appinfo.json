@@ -1,0 +1,19 @@
+{
+  "id": "org.webosbrew.lounge.launcher",
+  "version": "0.0.1",
+  "vendor": "webOS Homebrew",
+  "type": "web",
+  "main": "index.html",
+  "title": "Lounge",
+  "icon": "assets/icon.png",
+  "miniicon": "assets/icon-mini.png",
+  "largeIcon": "assets/icon-large.png",
+  "uiRevision": 2,
+  "appDescription": "Settle in. Pick what to watch.",
+  "requiredPermissions": [
+    "network.operation",
+    "network.query",
+    "activities.operation",
+    "services.blegacy"
+  ]
+}

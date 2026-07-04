@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1, user-scalable=no">
+  <title>Lounge</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <script src="webOS.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="background-layer" aria-hidden="true"></div>
+    <div id="scrim" aria-hidden="true"></div>
+
+    <header class="top-bar">
+      <div id="clock" class="clock"></div>
+    </header>
+
+    <main class="launcher">
+      <nav id="input-row" class="input-row" aria-label="Inputs"></nav>
+      <section id="app-grid" class="app-grid" aria-label="Apps"></section>
+    </main>
+
+    <footer id="music-bar" class="music-bar">
+      <span class="music-icon" aria-hidden="true">♪</span>
+      <span id="track-title" class="track-title">No music loaded</span>
+      <div class="music-controls">
+        <button id="mute-btn" type="button" class="mute-btn focusable" data-focus-index="800" aria-label="Mute" aria-pressed="false">🔉</button>
+        <input id="volume-slider" class="volume-slider focusable" data-focus-index="801" type="range" min="0" max="50" value="15" aria-label="Ambient volume">
+      </div>
+    </footer>
+
+    <div id="settings-panel" class="settings-panel" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <audio id="ambient-audio" preload="none"></audio>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
