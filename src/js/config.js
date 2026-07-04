@@ -4,7 +4,7 @@ import {normalizeMusicConfig} from './builtin-music.js';
 const STORAGE_KEY = 'lounge.config.v1';
 
 export const DEFAULT_CONFIG = {
-  version: 7,
+  version: 8,
   profile: 'default',
   profiles: {},
   background: {
@@ -35,8 +35,7 @@ export const DEFAULT_CONFIG = {
   launcher: {
     pinnedApps: [
       'netflix', 'amazon.html', 'youtube.leanback.v4', 'com.apple.appletv',
-      'com.webos.app.lgchannels', 'bbc.iplayer.lge', 'tv.wuaki',
-      'com.webos.app.browser', 'com.webos.app.mediadiscovery'
+      'bbc.iplayer.lge', 'com.webos.app.browser', 'com.webos.app.mediadiscovery'
     ],
     inputs: ['HDMI_1', 'HDMI_2', 'HDMI_3', 'TV'],
     inputLabels: {},
@@ -142,11 +141,19 @@ function migrateConfig(config) {
 
   if ((config.version || 1) < 7) {
     const pinned = config.launcher.pinnedApps || [];
-    ['com.webos.app.lgchannels', 'bbc.iplayer.lge', 'tv.wuaki', 'com.webos.app.browser', 'com.webos.app.mediadiscovery'].forEach(function (id) {
+    ['bbc.iplayer.lge', 'com.webos.app.browser', 'com.webos.app.mediadiscovery'].forEach(function (id) {
       if (pinned.indexOf(id) < 0) pinned.push(id);
     });
     config.launcher.pinnedApps = pinned;
     config.version = 7;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 8) {
+    config.launcher.pinnedApps = (config.launcher.pinnedApps || []).filter(function (id) {
+      return id !== 'com.webos.app.lgchannels' && id !== 'com.webos.app.livetv' && id !== 'tv.wuaki';
+    });
+    config.version = 8;
     saveConfig(config);
   }
 

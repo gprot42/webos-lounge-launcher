@@ -12,6 +12,10 @@ A fullscreen home screen for rooted LG webOS TVs. Pick an app, switch inputs, an
 - Clock, volume controls, and settings panel
 - Remote-friendly navigation
 
+## Compatibility
+
+Tested and working on the LG OLED55C56LB running webOS 25.
+
 ## Install
 
 Requires a rooted LG TV with [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) and SSH enabled.

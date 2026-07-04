@@ -8,7 +8,10 @@ export const REMOTE_KEY = {
   RED: 403,
   GREEN: 404,
   YELLOW: 405,
-  BLUE: 406
+  BLUE: 406,
+  VOLUME_UP: 447,
+  VOLUME_DOWN: 448,
+  VOLUME_MUTE: 449
 };
 
 export const HOME_APP_IDS = [

@@ -1,10 +1,12 @@
 import {saveConfig, TIMEZONE_OPTIONS} from './config.js';
 import {listInstalledApps} from './apps.js';
 import {loadAppCatalog, resolvePinnedApp} from './app-catalog.js';
+import {KNOWN_BUILTIN_APPS, getBuiltinAppIcon, getBuiltinAppTitle} from './app-icons.js';
 import {loadBuiltinManifest, normalizeBackgroundConfig, parseUrlList} from './backgrounds.js';
 import {loadBuiltinMusicManifest, normalizeMusicConfig} from './builtin-music.js';
 import {applyActiveProfile, PROFILE_OPTIONS} from './profiles.js';
 import {fetchInputDevices} from './inputs.js';
+import {findLoungeRoots, joinPath} from './usb.js';
 import {APP_VERSION} from './version.js';
 
 const DEFAULT_INPUTS = ['HDMI_1', 'HDMI_2', 'HDMI_3', 'TV'];
@@ -71,7 +73,7 @@ export function createSettingsPanel(panel, getConfig, options) {
   }
 
   function syncBackgroundFields(source, refs) {
-    const isImage = source !== 'preset';
+    const isImage = source !== 'preset' && source !== 'animated-gradient';
     const showBuiltin = source === 'builtin';
     const showUsb = source === 'usb';
     const showUrl = source === 'url';
@@ -224,6 +226,7 @@ export function createSettingsPanel(panel, getConfig, options) {
     sourceSelect.dataset.focusIndex = '902';
     [
       {value: 'preset', label: 'Gradient'},
+      {value: 'animated-gradient', label: 'Animated Gradient'},
       {value: 'builtin', label: 'Built-in photos'},
       {value: 'usb', label: 'USB folder'},
       {value: 'url', label: 'Image URL'}
@@ -357,7 +360,7 @@ export function createSettingsPanel(panel, getConfig, options) {
     };
 
     function syncFields() {
-      presetRow.hidden = sourceSelect.value !== 'preset';
+      presetRow.hidden = sourceSelect.value !== 'preset' && sourceSelect.value !== 'animated-gradient';
       syncBackgroundFields(sourceSelect.value, refs);
     }
 
@@ -409,14 +412,60 @@ export function createSettingsPanel(panel, getConfig, options) {
     const builtinTrackRow = labeledControl('Ambient track', builtinTrackSelect);
     musicSection.appendChild(builtinTrackRow);
 
+    const musicFolderPicker = document.createElement('select');
+    musicFolderPicker.className = 'focusable';
+    musicFolderPicker.dataset.focusIndex = '9145';
+    const customOpt = document.createElement('option');
+    customOpt.value = '';
+    customOpt.textContent = 'Custom path (type below)…';
+    musicFolderPicker.appendChild(customOpt);
+    const musicFolderRow = labeledControl('Browse folders', musicFolderPicker);
+    musicSection.appendChild(musicFolderRow);
+
+    findLoungeRoots().then(function (roots) {
+      const candidates = [];
+      roots.forEach(function (root) {
+        candidates.push(joinPath(root, 'music'));
+        candidates.push(joinPath(root, 'music', 'ambient'));
+        candidates.push(joinPath(root, 'music', 'jazz'));
+      });
+
+      candidates.forEach(function (path) {
+        const opt = document.createElement('option');
+        opt.value = path;
+        opt.textContent = path;
+        if ((config.music.path || '') === path) opt.selected = true;
+        musicFolderPicker.appendChild(opt);
+      });
+
+      if (!candidates.length) {
+        customOpt.textContent = 'No USB drives detected — type a path below';
+      }
+    }).catch(function () {
+      customOpt.textContent = 'Could not scan USB drives — type a path below';
+    });
+
     const musicPathInput = document.createElement('input');
     musicPathInput.type = 'text';
     musicPathInput.className = 'settings-text focusable';
     musicPathInput.dataset.focusIndex = '915';
-    musicPathInput.placeholder = 'Auto-detected from USB lounge/music';
+    musicPathInput.placeholder = 'e.g. /media/usb1/lounge/music or auto-detected';
     musicPathInput.value = config.music.path || '';
     const musicPathRow = labeledControl('Music folder', musicPathInput);
     musicSection.appendChild(musicPathRow);
+
+    musicFolderPicker.addEventListener('change', function () {
+      if (musicFolderPicker.value) {
+        musicPathInput.value = musicFolderPicker.value;
+      }
+    });
+
+    musicPathInput.addEventListener('input', function () {
+      const match = Array.prototype.find.call(musicFolderPicker.options, function (opt) {
+        return opt.value === musicPathInput.value;
+      });
+      musicFolderPicker.value = match ? match.value : '';
+    });
 
     const shuffleToggle = document.createElement('input');
     shuffleToggle.type = 'checkbox';
@@ -454,12 +503,13 @@ export function createSettingsPanel(panel, getConfig, options) {
 
     const musicHint = document.createElement('p');
     musicHint.className = 'settings-hint';
-    musicHint.textContent = 'Built-in tracks are copyright-free (CC0 / public domain). USB mode supports playlist.m3u or tracks.json. Red = pause, Green = skip.';
+    musicHint.textContent = 'Built-in tracks are copyright-free (CC0 / public domain). USB mode: pick a detected folder above or type the full path. Supports playlist.m3u or tracks.json. Red = pause, Green = skip.';
     musicSection.appendChild(musicHint);
 
     function syncMusicFields() {
       const isBuiltin = musicSourceSelect.value === 'builtin';
       builtinTrackRow.hidden = !isBuiltin;
+      musicFolderRow.hidden = isBuiltin;
       musicPathRow.hidden = isBuiltin;
       shuffleRow.hidden = isBuiltin;
       repeatRow.hidden = isBuiltin;
@@ -523,11 +573,21 @@ export function createSettingsPanel(panel, getConfig, options) {
 
     const appsSection = document.createElement('section');
     appsSection.className = 'settings-section';
-    appsSection.innerHTML = '<h3>Pinned apps</h3>';
+    appsSection.innerHTML = '<h3>Pinned apps</h3><p class="settings-hint">Reorder or remove apps pinned to the home row.</p>';
 
     const pinnedList = document.createElement('div');
     pinnedList.className = 'settings-pinned-list';
     appsSection.appendChild(pinnedList);
+
+    const addHeading = document.createElement('h4');
+    addHeading.className = 'settings-subheading';
+    addHeading.textContent = 'Add an app';
+    appsSection.appendChild(addHeading);
+
+    const addHint = document.createElement('p');
+    addHint.className = 'settings-hint';
+    addHint.textContent = 'Tap + next to any installed app below to pin it to the home row.';
+    appsSection.appendChild(addHint);
 
     const addAppsList = document.createElement('div');
     addAppsList.className = 'settings-apps';
@@ -650,16 +710,52 @@ export function createSettingsPanel(panel, getConfig, options) {
       }
     }
 
+    KNOWN_BUILTIN_APPS.forEach(function (id) {
+      if (appsByIdMap[id] && appsByIdMap[id].title) return;
+      appsByIdMap[id] = {
+        id: id,
+        title: getBuiltinAppTitle(id) || id,
+        icon: getBuiltinAppIcon(id) || ''
+      };
+    });
+
     pinnedContainer = pinnedListEl;
     renderPinnedList(pinnedListEl);
 
-    apps.sort(function (a, b) {
+    const seen = {};
+    const candidates = [];
+    apps.forEach(function (app) {
+      if (app && app.id && !seen[app.id]) {
+        seen[app.id] = true;
+        candidates.push(app);
+      }
+    });
+    Object.keys(appsByIdMap).forEach(function (id) {
+      const app = appsByIdMap[id];
+      if (app && app.id && app.title && !seen[app.id]) {
+        seen[app.id] = true;
+        candidates.push(app);
+      }
+    });
+
+    candidates.sort(function (a, b) {
       return (a.title || a.id).localeCompare(b.title || b.id);
     });
 
-    apps.forEach(function (app, index) {
-      if (pinnedOrder.indexOf(app.id) >= 0) return;
+    const remaining = candidates.filter(function (app) {
+      return pinnedOrder.indexOf(app.id) < 0;
+    });
 
+    if (!remaining.length) {
+      const empty = document.createElement('p');
+      empty.className = 'settings-hint';
+      empty.textContent = candidates.length
+        ? 'All available apps are already pinned.'
+        : 'No other apps were found on this TV.';
+      addContainer.appendChild(empty);
+    }
+
+    remaining.forEach(function (app, index) {
       const row = document.createElement('div');
       row.className = 'settings-app-row';
 

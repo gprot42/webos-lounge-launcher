@@ -29,6 +29,7 @@ export function createMusicPlayer(getConfig, elements) {
   const titleEl = elements.trackTitle;
   const muteBtn = elements.muteBtn;
   const volumeSlider = elements.volumeSlider;
+  const controlsWrap = volumeSlider.closest('.music-controls') || volumeSlider.parentElement;
 
   let tracks = [];
   let queue = [];
@@ -64,6 +65,13 @@ export function createMusicPlayer(getConfig, elements) {
     if (immediate) {
       audio.volume = muted ? 0 : value;
     }
+  }
+
+  function updateSliderFill() {
+    const min = Number(volumeSlider.min) || 0;
+    const max = Number(volumeSlider.max) || 100;
+    const pct = ((Number(volumeSlider.value) - min) / (max - min)) * 100;
+    volumeSlider.style.setProperty('--fill', pct + '%');
   }
 
   function clearFade() {
@@ -242,7 +250,34 @@ export function createMusicPlayer(getConfig, elements) {
   volumeSlider.addEventListener('input', function () {
     const value = Number(volumeSlider.value) / 100;
     setVolume(value, true);
+    updateSliderFill();
   });
+
+  function nudgeVolume(deltaPercent) {
+    const min = Number(volumeSlider.min) || 0;
+    const max = Number(volumeSlider.max) || 100;
+    const next = Math.max(min, Math.min(max, Number(volumeSlider.value) + deltaPercent));
+    volumeSlider.value = String(next);
+
+    if (muted && next > min) {
+      muted = false;
+      muteBtn.setAttribute('aria-pressed', 'false');
+      muteBtn.textContent = '🔉';
+    }
+
+    setVolume(next / 100, true);
+    updateSliderFill();
+
+    volumeSlider.classList.add('pulse');
+    controlsWrap.classList.add('pulsing');
+    clearTimeout(nudgeVolume.pulseTimer);
+    nudgeVolume.pulseTimer = setTimeout(function () {
+      volumeSlider.classList.remove('pulse');
+      controlsWrap.classList.remove('pulsing');
+    }, 500);
+
+    return next;
+  }
 
   return {
     loadTracks: loadTracks,
@@ -251,6 +286,7 @@ export function createMusicPlayer(getConfig, elements) {
     togglePause: togglePause,
     stop: stop,
     nextTrack: function () { nextTrack(false); },
+    nudgeVolume: nudgeVolume,
     get enabled() {
       const config = getConfig();
       return config.music && config.music.enabled;
@@ -260,6 +296,7 @@ export function createMusicPlayer(getConfig, elements) {
       const volume = (config.music && config.music.volume) || 0.15;
       setVolume(volume, true);
       volumeSlider.value = String(Math.round(volume * 100));
+      updateSliderFill();
       muteBtn.textContent = muted ? '🔇' : '🔉';
     }
   };

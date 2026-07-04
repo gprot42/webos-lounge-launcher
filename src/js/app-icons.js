@@ -15,7 +15,15 @@ const BUILTIN_APP_ICONS = {
   'bbc.iplayer': 'assets/app-icons/bbc-iplayer.png',
   'tv.wuaki': 'assets/app-icons/rakuten.png',
   'com.webos.app.browser': 'assets/app-icons/browser.png',
-  'com.webos.app.mediadiscovery': 'assets/app-icons/media-player.png'
+  'com.webos.app.mediadiscovery': 'assets/app-icons/media-player.png',
+  'com.zattoo.itvx': 'assets/app-icons/itvx.png',
+  'itvx': 'assets/app-icons/itvx.png',
+  'com.channel4.vod': 'assets/app-icons/channel4.png',
+  'all4': 'assets/app-icons/channel4.png',
+  'com.channel5.my5': 'assets/app-icons/channel5.png',
+  'my5': 'assets/app-icons/channel5.png',
+  'com.disney.disneyplus': 'assets/app-icons/disney-plus.png',
+  'disneyplus': 'assets/app-icons/disney-plus.png'
 };
 
 const BUILTIN_APP_TITLES = {
@@ -35,7 +43,15 @@ const BUILTIN_APP_TITLES = {
   'bbc.iplayer': 'BBC iPlayer',
   'tv.wuaki': 'Rakuten TV',
   'com.webos.app.browser': 'Web Browser',
-  'com.webos.app.mediadiscovery': 'Media Player'
+  'com.webos.app.mediadiscovery': 'Media Player',
+  'com.zattoo.itvx': 'ITVX',
+  'itvx': 'ITVX',
+  'com.channel4.vod': 'Channel 4',
+  'all4': 'Channel 4',
+  'com.channel5.my5': 'Channel 5',
+  'my5': 'Channel 5',
+  'com.disney.disneyplus': 'Disney+',
+  'disneyplus': 'Disney+'
 };
 
 /** Same app, different IDs across webOS 6 vs current TVs. */
@@ -47,7 +63,11 @@ export const APP_ID_ALIASES = {
   'amazon.html': ['amazon'],
   'com.webos.app.lgchannels': ['com.webos.app.livetv'],
   'bbc.iplayer.lge': ['bbc.iplayer'],
-  'bbc.iplayer': ['bbc.iplayer.lge']
+  'bbc.iplayer': ['bbc.iplayer.lge'],
+  'com.zattoo.itvx': ['itvx'],
+  'com.channel4.vod': ['all4'],
+  'com.channel5.my5': ['my5'],
+  'com.disney.disneyplus': ['disneyplus']
 };
 
 export function getAppIdCandidates(id) {
@@ -80,3 +100,20 @@ export function getBuiltinAppTitle(id) {
   }
   return '';
 }
+
+/** Curated apps we ship icons for, so they can always be added from settings. */
+export const KNOWN_BUILTIN_APPS = [
+  'com.apple.appletv',
+  'netflix',
+  'amazon.html',
+  'youtube.leanback.v4',
+  'com.webos.app.lgchannels',
+  'bbc.iplayer.lge',
+  'tv.wuaki',
+  'com.zattoo.itvx',
+  'com.channel4.vod',
+  'com.channel5.my5',
+  'com.disney.disneyplus',
+  'com.webos.app.browser',
+  'com.webos.app.mediadiscovery'
+];

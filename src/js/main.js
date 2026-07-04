@@ -96,6 +96,18 @@ const focus = createFocusManager(document.getElementById('app'), {
   onGreen: function () {
     if (settings.isVisible()) return;
     music.nextTrack();
+  },
+  onVolumeUp: function () {
+    if (settings.isVisible()) return;
+    music.nudgeVolume(5);
+  },
+  onVolumeDown: function () {
+    if (settings.isVisible()) return;
+    music.nudgeVolume(-5);
+  },
+  onVolumeMute: function () {
+    if (settings.isVisible()) return;
+    elements.muteBtn.click();
   }
 });
 

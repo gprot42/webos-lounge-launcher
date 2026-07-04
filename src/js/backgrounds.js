@@ -69,7 +69,7 @@ export async function resolveBackgroundImages(config, usbPath) {
   const bg = normalizeBackgroundConfig(config.background);
   const images = [];
 
-  if (bg.source === 'preset') {
+  if (bg.source === 'preset' || bg.source === 'animated-gradient') {
     return images;
   }
 

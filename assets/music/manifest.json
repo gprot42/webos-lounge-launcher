@@ -1,5 +1,5 @@
 {
-  "license": "Ambient tracks: CC0 1.0 / Public Domain (FreePD.com & Pixabay via SoundSafari/CC0-1.0-Music). Jazz tracks: Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0 (CC BY 4.0).",
+  "license": "Ambient tracks: CC0 1.0 / Public Domain (FreePD.com & Pixabay via SoundSafari/CC0-1.0-Music). Jazz & Relaxing tracks: Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0 (CC BY 4.0).",
   "tracks": [
     {
       "id": "midnight-lounge",
@@ -70,6 +70,34 @@
       "artist": "Jazz",
       "file": "vibe-ace.mp3",
       "description": "Breezy vibraphone swing"
+    },
+    {
+      "id": "meditation-impromptu",
+      "title": "Meditation Impromptu",
+      "artist": "Relaxing",
+      "file": "meditation-impromptu.mp3",
+      "description": "Slow solo piano for deep calm"
+    },
+    {
+      "id": "wallpaper",
+      "title": "Wallpaper",
+      "artist": "Relaxing",
+      "file": "wallpaper.mp3",
+      "description": "Soft ambient pads for unwinding"
+    },
+    {
+      "id": "windswept",
+      "title": "Windswept",
+      "artist": "Relaxing",
+      "file": "windswept.mp3",
+      "description": "Airy, drifting soundscape"
+    },
+    {
+      "id": "chill-wave",
+      "title": "Chill Wave",
+      "artist": "Relaxing",
+      "file": "chill-wave.mp3",
+      "description": "Laid-back downtempo groove"
     }
   ]
 }

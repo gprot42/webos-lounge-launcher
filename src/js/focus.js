@@ -91,6 +91,53 @@ export function createFocusManager(root, handlers) {
     focusItem(target);
   }
 
+  function moveSequential(active, delta) {
+    const scoped = items.filter(function (item) {
+      return focusRow(item) === 'settings';
+    });
+    const idx = scoped.indexOf(active);
+    if (idx < 0) return false;
+    const next = scoped[idx + delta];
+    if (!next) return true;
+    focusItem(next);
+    return true;
+  }
+
+  function adjustValueControl(el, dir) {
+    if (!el) return false;
+    const tag = el.tagName;
+
+    if (tag === 'SELECT') {
+      const count = el.options.length;
+      if (!count) return false;
+      let next = el.selectedIndex + dir;
+      if (next < 0) next = 0;
+      if (next > count - 1) next = count - 1;
+      if (next !== el.selectedIndex) {
+        el.selectedIndex = next;
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+      return true;
+    }
+
+    if (tag === 'INPUT' && el.type === 'range') {
+      const step = Number(el.step) || 1;
+      const min = el.min !== '' ? Number(el.min) : 0;
+      const max = el.max !== '' ? Number(el.max) : 100;
+      let next = Number(el.value) + dir * step;
+      if (next < min) next = min;
+      if (next > max) next = max;
+      if (next !== Number(el.value)) {
+        el.value = String(next);
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   function moveDirection(keyCode) {
     collect();
     if (!items.length) return;
@@ -103,11 +150,20 @@ export function createFocusManager(root, handlers) {
       return;
     }
 
+    const isHorizontal = keyCode === REMOTE_KEY.LEFT || keyCode === REMOTE_KEY.RIGHT;
+    const isVertical = keyCode === REMOTE_KEY.UP || keyCode === REMOTE_KEY.DOWN;
+
+    if (isHorizontal && focusRow(active) === 'settings' && adjustValueControl(active, keyCode === REMOTE_KEY.RIGHT ? 1 : -1)) {
+      return;
+    }
+
+    if (isVertical && focusRow(active) === 'settings') {
+      if (moveSequential(active, keyCode === REMOTE_KEY.DOWN ? 1 : -1)) return;
+    }
+
     const rect = active.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    const isHorizontal = keyCode === REMOTE_KEY.LEFT || keyCode === REMOTE_KEY.RIGHT;
-    const isVertical = keyCode === REMOTE_KEY.UP || keyCode === REMOTE_KEY.DOWN;
 
     let best = null;
     let bestScore = Infinity;
@@ -172,6 +228,30 @@ export function createFocusManager(root, handlers) {
       if (handlers && handlers.onGreen) {
         event.preventDefault();
         handlers.onGreen();
+      }
+      return;
+    }
+
+    if (code === REMOTE_KEY.VOLUME_UP) {
+      if (handlers && handlers.onVolumeUp) {
+        event.preventDefault();
+        handlers.onVolumeUp();
+      }
+      return;
+    }
+
+    if (code === REMOTE_KEY.VOLUME_DOWN) {
+      if (handlers && handlers.onVolumeDown) {
+        event.preventDefault();
+        handlers.onVolumeDown();
+      }
+      return;
+    }
+
+    if (code === REMOTE_KEY.VOLUME_MUTE) {
+      if (handlers && handlers.onVolumeMute) {
+        event.preventDefault();
+        handlers.onVolumeMute();
       }
       return;
     }

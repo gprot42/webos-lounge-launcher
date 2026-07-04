@@ -6,6 +6,10 @@
     {"id": "starry-night", "title": "Starry Night", "file": "starry-night.jpg"},
     {"id": "tropical-beach", "title": "Tropical Beach", "file": "tropical-beach.jpg"},
     {"id": "alpine-lake", "title": "Alpine Lake", "file": "alpine-lake.jpg"},
-    {"id": "golden-hills", "title": "Golden Hills", "file": "golden-hills.jpg"}
+    {"id": "golden-hills", "title": "Golden Hills", "file": "golden-hills.jpg"},
+    {"id": "snowy-cabin", "title": "Snowy Cabin", "file": "snowy-cabin.jpg"},
+    {"id": "desert-dusk", "title": "Desert Dusk", "file": "desert-dusk.jpg"},
+    {"id": "lavender-field", "title": "Lavender Field", "file": "lavender-field.jpg"},
+    {"id": "autumn-lake", "title": "Autumn Lake", "file": "autumn-lake.jpg"}
   ]
 }

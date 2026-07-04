@@ -16,12 +16,13 @@ export function createBackgroundController(elements, getConfig) {
   let slideshowImages = [];
   let usbBackgroundPath = '';
 
-  function applyPreset(name) {
+  function applyPreset(name, animated) {
     const gradient = PRESETS[name] || PRESETS['warm-gradient'];
     layer.style.backgroundImage = gradient;
     layer.style.backgroundColor = '#0a0a0f';
     layer.classList.remove('has-image');
     layer.classList.remove('ken-burns');
+    layer.classList.toggle('gradient-animated', !!animated);
   }
 
   function applyImage(url) {
@@ -71,8 +72,8 @@ export function createBackgroundController(elements, getConfig) {
     const config = getConfig();
     const bg = normalizeBackgroundConfig(config.background);
 
-    if (bg.source === 'preset') {
-      applyPreset(bg.preset || 'warm-gradient');
+    if (bg.source === 'preset' || bg.source === 'animated-gradient') {
+      applyPreset(bg.preset || 'warm-gradient', bg.source === 'animated-gradient');
       return;
     }
 
@@ -84,7 +85,7 @@ export function createBackgroundController(elements, getConfig) {
     const images = await resolveBackgroundImages(config, usbBackgroundPath);
 
     if (!images.length) {
-      applyPreset(bg.preset || 'warm-gradient');
+      applyPreset(bg.preset || 'warm-gradient', bg.source === 'animated-gradient');
       return;
     }
 
