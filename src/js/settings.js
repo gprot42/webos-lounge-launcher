@@ -545,6 +545,13 @@ export function createSettingsPanel(panel, getConfig, options) {
       config.launcher.timezone || '');
     launcherSection.appendChild(labeledControl('Timezone', timezoneSelect));
 
+    const iconSizeSelect = createOptionStepper('', 9205, [
+      {value: 'small', label: 'Small'},
+      {value: 'medium', label: 'Medium'},
+      {value: 'large', label: 'Large'}
+    ], config.launcher.iconSize || 'medium');
+    launcherSection.appendChild(labeledControl('Icon size', iconSizeSelect));
+
     const returnToggle = document.createElement('input');
     returnToggle.type = 'checkbox';
     returnToggle.checked = !!config.launcher.returnOnAppExit;
@@ -625,6 +632,7 @@ export function createSettingsPanel(panel, getConfig, options) {
 
       config.launcher.showClock = showClockToggle.checked;
       config.launcher.timezone = timezoneSelect.value;
+      config.launcher.iconSize = iconSizeSelect.value;
       config.launcher.returnOnAppExit = returnToggle.checked;
       config.launcher.bootOnStart = bootToggle.checked;
       config.launcher.pinnedApps = pinnedOrder.slice();

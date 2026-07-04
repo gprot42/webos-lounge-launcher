@@ -165,6 +165,7 @@ body {
   align-items: flex-end;
   margin: -14px;
   padding-top: 8px;
+  --tile-scale: 1;
 }
 
 .app-grid > * {
@@ -178,9 +179,9 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   backdrop-filter: blur(24px) saturate(140%);
   color: inherit;
-  width: 152px;
-  padding: 20px 12px 16px;
-  border-radius: 24px;
+  width: calc(152px * var(--tile-scale, 1));
+  padding: calc(20px * var(--tile-scale, 1)) calc(12px * var(--tile-scale, 1)) calc(16px * var(--tile-scale, 1));
+  border-radius: calc(24px * var(--tile-scale, 1));
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -190,7 +191,7 @@ body {
 }
 
 .app-tile > * + * {
-  margin-top: 14px;
+  margin-top: calc(14px * var(--tile-scale, 1));
 }
 
 .app-tile.settings-tile {
@@ -198,28 +199,28 @@ body {
 }
 
 .app-icon {
-  width: 92px;
-  height: 92px;
-  border-radius: 20px;
+  width: calc(92px * var(--tile-scale, 1));
+  height: calc(92px * var(--tile-scale, 1));
+  border-radius: calc(20px * var(--tile-scale, 1));
   object-fit: cover;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .app-fallback {
-  width: 92px;
-  height: 92px;
-  border-radius: 20px;
+  width: calc(92px * var(--tile-scale, 1));
+  height: calc(92px * var(--tile-scale, 1));
+  border-radius: calc(20px * var(--tile-scale, 1));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: calc(32px * var(--tile-scale, 1));
   font-weight: 600;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.05));
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .app-label {
-  font-size: 18px;
+  font-size: calc(18px * var(--tile-scale, 1));
   text-align: center;
   max-width: 100%;
   overflow: hidden;

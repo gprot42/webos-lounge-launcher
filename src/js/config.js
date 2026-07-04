@@ -4,7 +4,7 @@ import {normalizeMusicConfig} from './builtin-music.js';
 const STORAGE_KEY = 'lounge.config.v1';
 
 export const DEFAULT_CONFIG = {
-  version: 8,
+  version: 9,
   profile: 'default',
   profiles: {},
   background: {
@@ -41,6 +41,7 @@ export const DEFAULT_CONFIG = {
     inputLabels: {},
     showClock: true,
     timezone: '',
+    iconSize: 'medium',
     bootOnStart: false,
     returnOnAppExit: false
   }
@@ -154,6 +155,14 @@ function migrateConfig(config) {
       return id !== 'com.webos.app.lgchannels' && id !== 'com.webos.app.livetv' && id !== 'tv.wuaki';
     });
     config.version = 8;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 9) {
+    if (!config.launcher.iconSize) {
+      config.launcher.iconSize = 'medium';
+    }
+    config.version = 9;
     saveConfig(config);
   }
 

@@ -104,6 +104,9 @@ export function createAppGrid(container, getConfig, options) {
     container.innerHTML = '';
     const config = getConfig();
     const pinned = (config.launcher && config.launcher.pinnedApps) || [];
+    const scaleBySize = {small: 0.78, medium: 1, large: 1.28};
+    const iconSize = (config.launcher && config.launcher.iconSize) || 'medium';
+    container.style.setProperty('--tile-scale', String(scaleBySize[iconSize] || 1));
     const tiles = [];
 
     catalog = await loadAppCatalog();
