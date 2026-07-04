@@ -107,6 +107,11 @@ export function createFocusManager(root, handlers) {
     if (!el) return false;
     const tag = el.tagName;
 
+    if (el.classList && el.classList.contains('option-stepper') && typeof el.__step === 'function') {
+      el.__step(dir);
+      return true;
+    }
+
     if (tag === 'SELECT') {
       const count = el.options.length;
       if (!count) return false;

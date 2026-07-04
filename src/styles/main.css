@@ -507,6 +507,71 @@ body {
   cursor: pointer;
 }
 
+.option-stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 320px;
+  max-width: 440px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.05)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 8px rgba(0, 0, 0, 0.2),
+    0 6px 20px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.option-stepper .stepper-arrow {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 26px;
+  line-height: 1;
+  color: #ffd6aa;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: opacity 0.15s ease;
+}
+
+.option-stepper .stepper-arrow.is-disabled {
+  opacity: 0.25;
+}
+
+.option-stepper .stepper-label {
+  flex: 1 1 auto;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option-stepper.focused {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.85),
+    0 0 0 5px rgba(255, 200, 150, 0.55),
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    0 0 34px rgba(255, 190, 130, 0.35);
+  transform: scale(1.04);
+}
+
 .settings-save {
   background: rgba(255, 214, 170, 0.2);
   border-color: rgba(255, 214, 170, 0.4);

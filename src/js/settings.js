@@ -32,6 +32,83 @@ function attachInputScrollHelpers(scrollContainer) {
   });
 }
 
+function createOptionStepper(className, focusIndex, optionList, currentValue, onChange) {
+  const el = document.createElement('div');
+  el.className = 'option-stepper focusable' + (className ? ' ' + className : '');
+  el.dataset.focusIndex = String(focusIndex);
+  el.tabIndex = 0;
+
+  const prev = document.createElement('span');
+  prev.className = 'stepper-arrow';
+  prev.textContent = '\u2039';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'stepper-label';
+
+  const next = document.createElement('span');
+  next.className = 'stepper-arrow';
+  next.textContent = '\u203A';
+
+  el.appendChild(prev);
+  el.appendChild(labelEl);
+  el.appendChild(next);
+
+  let options = optionList.slice();
+  let index = 0;
+
+  function indexOfValue(value) {
+    for (let i = 0; i < options.length; i += 1) {
+      if (options[i].value === value) return i;
+    }
+    return -1;
+  }
+
+  function render() {
+    const opt = options[index] || {value: '', label: ''};
+    labelEl.textContent = opt.label;
+    el.value = opt.value;
+    el.dataset.value = opt.value;
+    prev.classList.toggle('is-disabled', index <= 0);
+    next.classList.toggle('is-disabled', index >= options.length - 1);
+  }
+
+  el.__step = function (dir) {
+    if (!options.length) return;
+    let n = index + dir;
+    if (n < 0) n = 0;
+    if (n > options.length - 1) n = options.length - 1;
+    if (n !== index) {
+      index = n;
+      render();
+      if (onChange) onChange(el.value);
+    }
+  };
+
+  el.setOptions = function (newOptions, newValue) {
+    options = (newOptions || []).slice();
+    const found = indexOfValue(newValue);
+    index = found >= 0 ? found : 0;
+    render();
+  };
+
+  el.setValue = function (value) {
+    const found = indexOfValue(value);
+    if (found >= 0 && found !== index) {
+      index = found;
+      render();
+    }
+  };
+
+  el.addEventListener('click', function () {
+    el.__step(1);
+  });
+
+  const start = indexOfValue(currentValue);
+  index = start >= 0 ? start : 0;
+  render();
+  return el;
+}
+
 export function createSettingsPanel(panel, getConfig, options) {
   let visible = false;
   let builtinManifest = [];
@@ -199,16 +276,11 @@ export function createSettingsPanel(panel, getConfig, options) {
     profileSection.className = 'settings-section';
     profileSection.innerHTML = '<h3>Profile</h3>';
 
-    const profileSelect = document.createElement('select');
-    profileSelect.className = 'focusable';
-    profileSelect.dataset.focusIndex = '901';
-    PROFILE_OPTIONS.forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.id;
-      opt.textContent = entry.label;
-      if ((config.profile || 'default') === entry.id) opt.selected = true;
-      profileSelect.appendChild(opt);
-    });
+    const profileSelect = createOptionStepper('', 901,
+      PROFILE_OPTIONS.map(function (entry) {
+        return {value: entry.id, label: entry.label};
+      }),
+      config.profile || 'default');
     profileSection.appendChild(labeledControl('Active profile', profileSelect));
 
     const profileHint = document.createElement('p');
@@ -221,63 +293,40 @@ export function createSettingsPanel(panel, getConfig, options) {
     section.className = 'settings-section';
     section.innerHTML = '<h3>Background</h3>';
 
-    const sourceSelect = document.createElement('select');
-    sourceSelect.className = 'focusable';
-    sourceSelect.dataset.focusIndex = '902';
-    [
+    const sourceSelect = createOptionStepper('', 902, [
       {value: 'preset', label: 'Gradient'},
       {value: 'animated-gradient', label: 'Animated Gradient'},
       {value: 'builtin', label: 'Built-in photos'},
       {value: 'usb', label: 'USB folder'},
       {value: 'url', label: 'Image URL'}
-    ].forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.value;
-      opt.textContent = entry.label;
-      if (bg.source === entry.value) opt.selected = true;
-      sourceSelect.appendChild(opt);
+    ], bg.source, function () {
+      syncFields();
     });
     section.appendChild(labeledControl('Source', sourceSelect));
 
-    const presetSelect = document.createElement('select');
-    presetSelect.className = 'focusable';
-    presetSelect.dataset.focusIndex = '903';
-    ['warm-gradient', 'cool-gradient', 'midnight', 'ember'].forEach(function (preset) {
-      const opt = document.createElement('option');
-      opt.value = preset;
-      opt.textContent = preset;
-      if (bg.preset === preset) opt.selected = true;
-      presetSelect.appendChild(opt);
-    });
+    const presetSelect = createOptionStepper('', 903, [
+      {value: 'warm-gradient', label: 'Warm gradient'},
+      {value: 'cool-gradient', label: 'Cool gradient'},
+      {value: 'midnight', label: 'Midnight'},
+      {value: 'ember', label: 'Ember'}
+    ], bg.preset);
     const presetRow = labeledControl('Gradient', presetSelect);
     section.appendChild(presetRow);
 
-    const displaySelect = document.createElement('select');
-    displaySelect.className = 'focusable';
-    displaySelect.dataset.focusIndex = '904';
-    [
+    const displaySelect = createOptionStepper('', 904, [
       {value: 'static', label: 'Single image'},
       {value: 'slideshow', label: 'Slideshow'}
-    ].forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.value;
-      opt.textContent = entry.label;
-      if (bg.mode === entry.value) opt.selected = true;
-      displaySelect.appendChild(opt);
+    ], bg.mode, function () {
+      syncFields();
     });
     const displayRow = labeledControl('Display', displaySelect);
     section.appendChild(displayRow);
 
-    const builtinSelect = document.createElement('select');
-    builtinSelect.className = 'focusable';
-    builtinSelect.dataset.focusIndex = '905';
-    builtinManifest.forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.id;
-      opt.textContent = entry.title || entry.id;
-      if (bg.builtin === entry.id) opt.selected = true;
-      builtinSelect.appendChild(opt);
-    });
+    const builtinSelect = createOptionStepper('', 905,
+      builtinManifest.map(function (entry) {
+        return {value: entry.id, label: entry.title || entry.id};
+      }),
+      bg.builtin);
     const builtinRow = labeledControl('Photo', builtinSelect);
     section.appendChild(builtinRow);
 
@@ -364,8 +413,6 @@ export function createSettingsPanel(panel, getConfig, options) {
       syncBackgroundFields(sourceSelect.value, refs);
     }
 
-    sourceSelect.addEventListener('change', syncFields);
-    displaySelect.addEventListener('change', syncFields);
     syncFields();
 
     const music = normalizeMusicConfig(config.music);
@@ -382,67 +429,47 @@ export function createSettingsPanel(panel, getConfig, options) {
     musicEnabled.dataset.focusIndex = '912';
     musicSection.appendChild(labeledControl('Ambient music', musicEnabled));
 
-    const musicSourceSelect = document.createElement('select');
-    musicSourceSelect.className = 'focusable';
-    musicSourceSelect.dataset.focusIndex = '913';
-    [
+    const musicSourceSelect = createOptionStepper('', 913, [
       {value: 'builtin', label: 'Built-in ambient'},
       {value: 'usb', label: 'USB folder'}
-    ].forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.value;
-      opt.textContent = entry.label;
-      if (music.source === entry.value) opt.selected = true;
-      musicSourceSelect.appendChild(opt);
+    ], music.source, function () {
+      syncMusicFields();
     });
     const musicSourceRow = labeledControl('Source', musicSourceSelect);
     musicSection.appendChild(musicSourceRow);
 
-    const builtinTrackSelect = document.createElement('select');
-    builtinTrackSelect.className = 'focusable';
-    builtinTrackSelect.dataset.focusIndex = '914';
-    builtinTracks.forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.id;
-      const detail = entry.description ? ' — ' + entry.description : '';
-      opt.textContent = (entry.title || entry.id) + detail;
-      if (music.builtin === entry.id) opt.selected = true;
-      builtinTrackSelect.appendChild(opt);
-    });
+    const builtinTrackSelect = createOptionStepper('', 914,
+      builtinTracks.map(function (entry) {
+        const detail = entry.description ? ' — ' + entry.description : '';
+        return {value: entry.id, label: (entry.title || entry.id) + detail};
+      }),
+      music.builtin);
     const builtinTrackRow = labeledControl('Ambient track', builtinTrackSelect);
     musicSection.appendChild(builtinTrackRow);
 
-    const musicFolderPicker = document.createElement('select');
-    musicFolderPicker.className = 'focusable';
-    musicFolderPicker.dataset.focusIndex = '9145';
-    const customOpt = document.createElement('option');
-    customOpt.value = '';
-    customOpt.textContent = 'Custom path (type below)…';
-    musicFolderPicker.appendChild(customOpt);
+    const musicFolderPicker = createOptionStepper('', 9145, [
+      {value: '', label: 'Custom path (type below)…'}
+    ], '', function (value) {
+      if (value) musicPathInput.value = value;
+    });
     const musicFolderRow = labeledControl('Browse folders', musicFolderPicker);
     musicSection.appendChild(musicFolderRow);
 
     findLoungeRoots().then(function (roots) {
-      const candidates = [];
+      const opts = [{value: '', label: 'Custom path (type below)…'}];
       roots.forEach(function (root) {
-        candidates.push(joinPath(root, 'music'));
-        candidates.push(joinPath(root, 'music', 'ambient'));
-        candidates.push(joinPath(root, 'music', 'jazz'));
+        opts.push({value: joinPath(root, 'music'), label: joinPath(root, 'music')});
+        opts.push({value: joinPath(root, 'music', 'ambient'), label: joinPath(root, 'music', 'ambient')});
+        opts.push({value: joinPath(root, 'music', 'jazz'), label: joinPath(root, 'music', 'jazz')});
       });
 
-      candidates.forEach(function (path) {
-        const opt = document.createElement('option');
-        opt.value = path;
-        opt.textContent = path;
-        if ((config.music.path || '') === path) opt.selected = true;
-        musicFolderPicker.appendChild(opt);
-      });
-
-      if (!candidates.length) {
-        customOpt.textContent = 'No USB drives detected — type a path below';
+      if (opts.length === 1) {
+        opts[0].label = 'No USB drives detected — type a path below';
       }
+      musicFolderPicker.setOptions(opts, config.music.path || '');
     }).catch(function () {
-      customOpt.textContent = 'Could not scan USB drives — type a path below';
+      musicFolderPicker.setOptions(
+        [{value: '', label: 'Could not scan USB drives — type a path below'}], '');
     });
 
     const musicPathInput = document.createElement('input');
@@ -454,17 +481,8 @@ export function createSettingsPanel(panel, getConfig, options) {
     const musicPathRow = labeledControl('Music folder', musicPathInput);
     musicSection.appendChild(musicPathRow);
 
-    musicFolderPicker.addEventListener('change', function () {
-      if (musicFolderPicker.value) {
-        musicPathInput.value = musicFolderPicker.value;
-      }
-    });
-
     musicPathInput.addEventListener('input', function () {
-      const match = Array.prototype.find.call(musicFolderPicker.options, function (opt) {
-        return opt.value === musicPathInput.value;
-      });
-      musicFolderPicker.value = match ? match.value : '';
+      musicFolderPicker.setValue(musicPathInput.value);
     });
 
     const shuffleToggle = document.createElement('input');
@@ -475,20 +493,11 @@ export function createSettingsPanel(panel, getConfig, options) {
     const shuffleRow = labeledControl('Shuffle', shuffleToggle);
     musicSection.appendChild(shuffleRow);
 
-    const repeatSelect = document.createElement('select');
-    repeatSelect.className = 'focusable';
-    repeatSelect.dataset.focusIndex = '917';
-    [
+    const repeatSelect = createOptionStepper('', 917, [
       {value: 'all', label: 'Repeat all'},
       {value: 'one', label: 'Repeat one'},
       {value: 'off', label: 'Play once'}
-    ].forEach(function (entry) {
-      const opt = document.createElement('option');
-      opt.value = entry.value;
-      opt.textContent = entry.label;
-      if ((config.music.repeat || 'one') === entry.value) opt.selected = true;
-      repeatSelect.appendChild(opt);
-    });
+    ], config.music.repeat || 'one');
     const repeatRow = labeledControl('Repeat', repeatSelect);
     musicSection.appendChild(repeatRow);
 
@@ -515,7 +524,6 @@ export function createSettingsPanel(panel, getConfig, options) {
       repeatRow.hidden = isBuiltin;
     }
 
-    musicSourceSelect.addEventListener('change', syncMusicFields);
     syncMusicFields();
     body.appendChild(musicSection);
 
@@ -530,16 +538,11 @@ export function createSettingsPanel(panel, getConfig, options) {
     showClockToggle.dataset.focusIndex = '919';
     launcherSection.appendChild(labeledControl('Show clock', showClockToggle));
 
-    const timezoneSelect = document.createElement('select');
-    timezoneSelect.className = 'focusable';
-    timezoneSelect.dataset.focusIndex = '920';
-    TIMEZONE_OPTIONS.forEach(function (option) {
-      const item = document.createElement('option');
-      item.value = option.value;
-      item.textContent = option.label;
-      if ((config.launcher.timezone || '') === option.value) item.selected = true;
-      timezoneSelect.appendChild(item);
-    });
+    const timezoneSelect = createOptionStepper('', 920,
+      TIMEZONE_OPTIONS.map(function (option) {
+        return {value: option.value, label: option.label};
+      }),
+      config.launcher.timezone || '');
     launcherSection.appendChild(labeledControl('Timezone', timezoneSelect));
 
     const returnToggle = document.createElement('input');
