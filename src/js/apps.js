@@ -1,6 +1,6 @@
 import {launchApp, listApps} from './luna.js';
 import {loadAppCatalog, normalizeAppRecord, resolvePinnedApp} from './app-catalog.js';
-import {getBuiltinAppIcon} from './app-icons.js';
+import {getAppIdCandidates, getBuiltinAppIcon} from './app-icons.js';
 
 const APP_ID = 'org.webosbrew.lounge.launcher';
 
@@ -47,7 +47,7 @@ export function createAppGrid(container, getConfig, options) {
     button.appendChild(label);
 
     button.addEventListener('click', function () {
-      openApp(app.id);
+      openApp(app);
     });
 
     return button;
@@ -78,16 +78,26 @@ export function createAppGrid(container, getConfig, options) {
     return button;
   }
 
-  async function openApp(id) {
+  async function openApp(app) {
     if (options.onBeforeLaunch) options.onBeforeLaunch();
 
-    try {
-      await launchApp(id);
-    } catch (err) {
-      const app = catalog[id];
-      const label = app && app.title ? app.title : id;
-      if (options.onToast) options.onToast('Could not launch ' + label);
+    const ids = [];
+    if (app && app.launchId) ids.push(app.launchId);
+    getAppIdCandidates((app && app.id) || '').forEach(function (candidate) {
+      if (candidate && ids.indexOf(candidate) < 0) ids.push(candidate);
+    });
+
+    for (let i = 0; i < ids.length; i += 1) {
+      try {
+        await launchApp(ids[i]);
+        return;
+      } catch (err) {
+        // Try the next candidate id (e.g. amazon.html -> amazon).
+      }
     }
+
+    const label = app && app.title ? app.title : (app && app.id) || 'app';
+    if (options.onToast) options.onToast('Could not launch ' + label);
   }
 
   async function refresh() {

@@ -4,7 +4,7 @@ import {normalizeMusicConfig} from './builtin-music.js';
 const STORAGE_KEY = 'lounge.config.v1';
 
 export const DEFAULT_CONFIG = {
-  version: 3,
+  version: 7,
   profile: 'default',
   profiles: {},
   background: {
@@ -26,14 +26,18 @@ export const DEFAULT_CONFIG = {
     builtin: 'midnight-lounge',
     path: '',
     shuffle: false,
-    repeat: 'one',
+    repeat: 'all',
     volume: 0.15,
     fadeSec: 2,
     pauseOnLaunch: true,
     resumeOnReturn: true
   },
   launcher: {
-    pinnedApps: ['netflix', 'amazon.html', 'youtube.leanback.v4'],
+    pinnedApps: [
+      'netflix', 'amazon.html', 'youtube.leanback.v4', 'com.apple.appletv',
+      'com.webos.app.lgchannels', 'bbc.iplayer.lge', 'tv.wuaki',
+      'com.webos.app.browser', 'com.webos.app.mediadiscovery'
+    ],
     inputs: ['HDMI_1', 'HDMI_2', 'HDMI_3', 'TV'],
     inputLabels: {},
     showClock: true,
@@ -115,6 +119,34 @@ function migrateConfig(config) {
       config.launcher.timezone = '';
     }
     config.version = 4;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 5) {
+    if (config.music && config.music.repeat === 'one') {
+      config.music.repeat = 'all';
+    }
+    config.version = 5;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 6) {
+    const pinned = config.launcher.pinnedApps || [];
+    if (pinned.indexOf('com.apple.appletv') < 0) {
+      pinned.push('com.apple.appletv');
+    }
+    config.launcher.pinnedApps = pinned;
+    config.version = 6;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 7) {
+    const pinned = config.launcher.pinnedApps || [];
+    ['com.webos.app.lgchannels', 'bbc.iplayer.lge', 'tv.wuaki', 'com.webos.app.browser', 'com.webos.app.mediadiscovery'].forEach(function (id) {
+      if (pinned.indexOf(id) < 0) pinned.push(id);
+    });
+    config.launcher.pinnedApps = pinned;
+    config.version = 7;
     saveConfig(config);
   }
 

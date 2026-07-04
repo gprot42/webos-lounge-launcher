@@ -41,6 +41,15 @@ export function getBuiltinTrackUrl(id, manifest) {
   return joinPath(BUILTIN_BASE, entry.file);
 }
 
+function toTrack(entry) {
+  return {
+    url: joinPath(BUILTIN_BASE, entry.file),
+    title: entry.title || entry.id,
+    artist: entry.artist || '',
+    description: entry.description || ''
+  };
+}
+
 export async function resolveBuiltinTrack(id) {
   const manifest = await loadBuiltinMusicManifest();
   const entry = manifest.find(function (item) {
@@ -49,10 +58,21 @@ export async function resolveBuiltinTrack(id) {
 
   if (!entry) return null;
 
-  return {
-    url: joinPath(BUILTIN_BASE, entry.file),
-    title: entry.title || entry.id,
-    artist: entry.artist || '',
-    description: entry.description || ''
-  };
+  return toTrack(entry);
+}
+
+export async function resolveBuiltinPlaylist(id) {
+  const manifest = await loadBuiltinMusicManifest();
+  if (!manifest.length) return [];
+
+  let startIndex = manifest.findIndex(function (item) {
+    return item.id === id;
+  });
+  if (startIndex < 0) startIndex = 0;
+
+  const ordered = manifest
+    .slice(startIndex)
+    .concat(manifest.slice(0, startIndex));
+
+  return ordered.map(toTrack);
 }

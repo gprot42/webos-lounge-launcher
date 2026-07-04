@@ -1,5 +1,5 @@
 {
-  "license": "CC0 1.0 / Public Domain (FreePD.com & Pixabay via SoundSafari/CC0-1.0-Music)",
+  "license": "Ambient tracks: CC0 1.0 / Public Domain (FreePD.com & Pixabay via SoundSafari/CC0-1.0-Music). Jazz tracks: Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0 (CC BY 4.0).",
   "tracks": [
     {
       "id": "midnight-lounge",
@@ -42,6 +42,34 @@
       "artist": "Ambient",
       "file": "forest-night.mp3",
       "description": "Quiet woodland after dark"
+    },
+    {
+      "id": "backbay-lounge",
+      "title": "Backbay Lounge",
+      "artist": "Jazz",
+      "file": "backbay-lounge.mp3",
+      "description": "Smooth late-night lounge jazz"
+    },
+    {
+      "id": "bossa-antigua",
+      "title": "Bossa Antigua",
+      "artist": "Jazz",
+      "file": "bossa-antigua.mp3",
+      "description": "Warm bossa nova groove"
+    },
+    {
+      "id": "club-diver",
+      "title": "Club Diver",
+      "artist": "Jazz",
+      "file": "club-diver.mp3",
+      "description": "Cool downtempo jazz club"
+    },
+    {
+      "id": "vibe-ace",
+      "title": "Vibe Ace",
+      "artist": "Jazz",
+      "file": "vibe-ace.mp3",
+      "description": "Breezy vibraphone swing"
     }
   ]
 }

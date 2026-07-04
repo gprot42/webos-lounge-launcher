@@ -90,6 +90,7 @@ function applyBuiltinOverrides(record) {
 
   return {
     id: record.id,
+    launchId: record.launchId || record.id,
     title: builtinTitle || record.title,
     icon: builtinIcon || record.icon
   };
@@ -135,6 +136,7 @@ export async function resolvePinnedApp(id, catalog) {
       const normalized = normalizeAppRecord(info, candidate);
       const merged = applyBuiltinOverrides({
         id: id,
+        launchId: candidate,
         title: (cached && cached.title) || (cachedCandidate && cachedCandidate.title) || normalized.title,
         icon: pickBestIcon(
           cached && cached.icon,
@@ -148,6 +150,7 @@ export async function resolvePinnedApp(id, catalog) {
       if (cachedCandidate) {
         const merged = applyBuiltinOverrides({
           id: id,
+          launchId: candidate,
           title: cachedCandidate.title,
           icon: cachedCandidate.icon || ''
         });

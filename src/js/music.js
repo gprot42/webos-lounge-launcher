@@ -1,4 +1,4 @@
-import {normalizeMusicConfig, resolveBuiltinTrack} from './builtin-music.js';
+import {normalizeMusicConfig, resolveBuiltinPlaylist} from './builtin-music.js';
 import {discoverMusicTracks, isAudioFile} from './usb.js';
 
 function shuffleArray(items) {
@@ -163,8 +163,7 @@ export function createMusicPlayer(getConfig, elements) {
     let discovered = [];
 
     if (music.source === 'builtin') {
-      const builtinTrack = await resolveBuiltinTrack(music.builtin);
-      if (builtinTrack) discovered = [builtinTrack];
+      discovered = await resolveBuiltinPlaylist(music.builtin);
     } else {
       discovered = await discoverMusicTracks(music.path || '');
     }
