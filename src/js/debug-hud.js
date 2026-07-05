@@ -87,12 +87,26 @@ export function createDebugHud() {
     state.lastClickTarget = describe(e.target);
   }, true);
 
+  function focusPos() {
+    try {
+      const list = Array.prototype.slice.call(
+        document.querySelectorAll('.focusable:not([disabled])'));
+      list.sort(function (a, b) {
+        return Number(a.dataset.focusIndex || 0) - Number(b.dataset.focusIndex || 0);
+      });
+      const i = list.indexOf(document.activeElement);
+      return i + '/' + list.length;
+    } catch (err) {
+      return '?';
+    }
+  }
+
   function render() {
     state.beats += 1;
     const lines = [
       'HUD beat=' + state.beats,
       'vis=' + document.visibilityState + ' hidden=' + document.hidden,
-      'active=' + describe(document.activeElement),
+      'active=' + describe(document.activeElement) + ' pos=' + focusPos(),
       'key=' + state.lastKeyCode + '/' + state.lastKeyName + ' (' + ago(state.lastKeyAt) + ' ago)',
       'keys L=' + state.cL + ' R=' + state.cR + ' U=' + state.cU + ' D=' + state.cD + ' OK=' + state.cE,
       'ptr=' + ago(state.lastPtrAt) + ' ago',
