@@ -246,16 +246,43 @@ export function listApps() {
   });
 }
 
+function pickForegroundId(res) {
+  if (!res) return '';
+  if (res.appId) return res.appId;
+  if (Array.isArray(res.foregroundAppInfo) && res.foregroundAppInfo.length) {
+    return res.foregroundAppInfo[0].appId || '';
+  }
+  return '';
+}
+
 export function getForegroundApp() {
-  return withTimeout(lunaRequest('luna://com.webos.applicationManager', {
-    method: 'getForegroundApp',
+  // On retail webOS `getForegroundAppInfo` only answers a *subscription*, not a
+  // one-shot request -- a plain request just hangs. Subscribe, take the first
+  // payload, then cancel so this behaves like a one-shot.
+  return withTimeout(lunaSubscribeOnce('luna://com.webos.applicationManager', {
+    method: 'getForegroundAppInfo',
     parameters: {}
+  }), 4000).then(function (res) {
+    return {appId: pickForegroundId(res)};
   }).catch(function () {
-    return lunaRequest('luna://com.webos.applicationManager', {
-      method: 'getForegroundAppInfo',
+    return withTimeout(lunaRequest('luna://com.webos.applicationManager', {
+      method: 'getForegroundApp',
       parameters: {}
+    }), 4000).then(function (res) {
+      return {appId: pickForegroundId(res)};
     });
-  }), 4000);
+  });
+}
+
+/**
+ * Bring an already-running app to the foreground (or launch it). Used to
+ * reclaim input focus when another app has grabbed it without covering us.
+ */
+export function closeApp(id) {
+  return lunaRequest('luna://com.webos.applicationManager', {
+    method: 'closeByAppId',
+    parameters: {id: id}
+  });
 }
 
 export function getAllInputStatus() {

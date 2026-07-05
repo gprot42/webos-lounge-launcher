@@ -20,8 +20,9 @@ let visible = true;
 let foregroundTimer = null;
 let lastForegroundAppId = APP_ID;
 let returningToLounge = false;
-let stuckTicks = 0;
-let lastLaunchAt = 0;
+let launchPending = false;
+let wentHiddenSinceLaunch = false;
+let launchAt = 0;
 let debugHud = null;
 
 const elements = {
@@ -83,7 +84,9 @@ const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
 });
 const apps = createAppGrid(elements.appGrid, getConfig, {
   onBeforeLaunch: function () {
-    lastLaunchAt = Date.now();
+    launchPending = true;
+    wentHiddenSinceLaunch = false;
+    launchAt = Date.now();
     const config = getConfig();
     if (config.music && config.music.pauseOnLaunch) {
       music.fadeOutAndPause();
@@ -311,6 +314,9 @@ function handleResume() {
 function handleVisibilityChange() {
   if (document.hidden) {
     visible = false;
+    // Our surface was backgrounded, so any app we launched took the foreground
+    // normally. This disarms the ghost-focus recovery for that launch.
+    wentHiddenSinceLaunch = true;
     return;
   }
   handleResume();
@@ -352,32 +358,42 @@ function startForegroundWatcher() {
         music.fadeOutAndPause();
       }
 
-      // Stuck-state recovery. If our page is still visible (webOS never sent a
-      // visibilitychange->hidden) yet the system's foreground app is not us,
-      // an app we launched grabbed input focus without actually covering the
-      // screen -- e.g. a broken "viewer" that "doesn't launch". The dock is
-      // shown but every key/pointer event now goes to that ghost window, so the
-      // launcher feels frozen. Relaunch ourselves to reclaim foreground input.
-      // Require two consecutive ticks so we never yank the user out of an app
-      // they intentionally opened (that path flips us to hidden within a tick).
-      const launchedRecently = (Date.now() - lastLaunchAt) < 30000;
-      if (visible && launchedRecently && appId && appId !== APP_ID && !returningToLounge) {
-        stuckTicks += 1;
-        if (stuckTicks >= 2) {
-          stuckTicks = 0;
-          returningToLounge = true;
-          try {
-            await launchApp(APP_ID);
-          } catch (err) {
-            // Best-effort reclaim.
-          } finally {
-            returningToLounge = false;
-          }
-          lastForegroundAppId = APP_ID;
-          return;
+      // Ghost-focus recovery.
+      //
+      // Symptom (confirmed on-device): the user launches an app from the dock
+      // (e.g. a "viewer"/media app) which grabs REMOTE INPUT but never takes the
+      // graphics foreground -- so our launcher stays fully visible on top yet
+      // receives zero key events and feels frozen.
+      //
+      // We detect this precisely:
+      //   - launchPending          : the user launched something from our dock
+      //   - !wentHiddenSinceLaunch : our surface was never backgrounded, i.e.
+      //                              we are still the top surface on screen
+      //   - appId && appId !== us  : yet the system foreground app is not us
+      //
+      // This excludes apps opened normally (they fire visibilitychange->hidden,
+      // setting wentHiddenSinceLaunch) and benign failed launches (nothing
+      // actually launched, so the foreground app stays us). In those cases we
+      // must NOT relaunch, or we'd yank the user out of their app.
+      if (launchPending && !wentHiddenSinceLaunch && visible &&
+          appId && appId !== APP_ID && !returningToLounge &&
+          (Date.now() - launchAt) > 2500) {
+        launchPending = false;
+        returningToLounge = true;
+        try {
+          await launchApp(APP_ID);
+        } catch (err) {
+          // Best-effort reclaim.
+        } finally {
+          returningToLounge = false;
         }
-      } else {
-        stuckTicks = 0;
+        lastForegroundAppId = APP_ID;
+        return;
+      }
+
+      // Stop watching a launch once it clearly resolved one way or another.
+      if (launchPending && (wentHiddenSinceLaunch || (Date.now() - launchAt) > 15000)) {
+        launchPending = false;
       }
 
       await maybeReturnToLounge(appId);
