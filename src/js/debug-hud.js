@@ -40,7 +40,14 @@ export function createDebugHud() {
     lastClickAt: 0,
     lastClickTarget: '-',
     fgApp: '-',
-    fgAt: 0
+    fgAt: 0,
+    // Per-direction keydown counters. If LEFT/RIGHT stay 0 while ENTER climbs,
+    // the platform is eating arrow keys (Magic Remote pointer mode), not us.
+    cL: 0,
+    cR: 0,
+    cU: 0,
+    cD: 0,
+    cE: 0
   };
 
   function ago(ts) {
@@ -62,6 +69,13 @@ export function createDebugHud() {
     state.lastKeyCode = e.keyCode;
     state.lastKeyName = e.key || '-';
     state.lastKeyAt = Date.now();
+    const c = e.keyCode;
+    const k = e.key;
+    if (c === 37 || k === 'ArrowLeft') state.cL += 1;
+    else if (c === 39 || k === 'ArrowRight') state.cR += 1;
+    else if (c === 38 || k === 'ArrowUp') state.cU += 1;
+    else if (c === 40 || k === 'ArrowDown') state.cD += 1;
+    else if (c === 13 || k === 'Enter') state.cE += 1;
   }, true);
 
   document.addEventListener('mousemove', function () {
@@ -80,6 +94,7 @@ export function createDebugHud() {
       'vis=' + document.visibilityState + ' hidden=' + document.hidden,
       'active=' + describe(document.activeElement),
       'key=' + state.lastKeyCode + '/' + state.lastKeyName + ' (' + ago(state.lastKeyAt) + ' ago)',
+      'keys L=' + state.cL + ' R=' + state.cR + ' U=' + state.cU + ' D=' + state.cD + ' OK=' + state.cE,
       'ptr=' + ago(state.lastPtrAt) + ' ago',
       'click=' + state.lastClickTarget + ' (' + ago(state.lastClickAt) + ' ago)',
       'fgApp=' + state.fgApp + ' (' + ago(state.fgAt) + ' ago)'
