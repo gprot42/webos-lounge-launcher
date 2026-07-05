@@ -114,7 +114,9 @@ export function createDebugHud() {
       'click=' + state.lastClickTarget + ' (' + ago(state.lastClickAt) + ' ago)',
       'fgApp=' + state.fgApp + ' (' + ago(state.fgAt) + ' ago)',
       'nav=' + ((window.__NAV && window.__NAV.last) || '-'),
-      'kd=' + ((window.__NAV && window.__NAV.kd) || 0) + ' raw=' + ((window.__NAV && window.__NAV.rawCode) || '-') + ' pg=' + ((window.__NAV && window.__NAV.pg) || 0)
+      'kd=' + ((window.__NAV && window.__NAV.kd) || 0) + ' raw=' + ((window.__NAV && window.__NAV.rawCode) || '-') + ' pg=' + ((window.__NAV && window.__NAV.pg) || 0),
+      'steal=' + ((window.__NAV && window.__NAV.steal) || 0) + ' spos=' + ((window.__NAV && window.__NAV.stealPos) != null ? window.__NAV.stealPos : '-'),
+      'by=' + ((window.__NAV && window.__NAV.stealFrom) || '-')
     ];
     el.textContent = lines.join('\n');
   }

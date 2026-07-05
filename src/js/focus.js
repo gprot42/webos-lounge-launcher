@@ -29,6 +29,9 @@ export function createFocusManager(root, handlers) {
   let lastRealPointerY = null;
   let lastKeyNavAt = 0;
   const KEY_NAV_POINTER_GUARD_MS = 700;
+  // True only while our own focusItem() is calling .focus(). Lets the focusin
+  // diagnostic distinguish manager-driven focus from an external focus-stealer.
+  let focusingViaManager = false;
 
   function collect() {
     items = Array.from(root.querySelectorAll('.focusable:not([disabled])'));
@@ -69,7 +72,9 @@ export function createFocusManager(root, handlers) {
 
   function focusItem(el) {
     if (!el) return false;
+    focusingViaManager = true;
     el.focus();
+    focusingViaManager = false;
     // webOS/Chromium silently ignores .focus() on elements that are not
     // actually focusable at that moment (visibility:hidden, detached, an
     // ancestor with visibility:hidden, tabindex removed, etc). When that
@@ -488,6 +493,23 @@ export function createFocusManager(root, handlers) {
 
   document.addEventListener('keydown', onKeyDown);
   root.addEventListener('mousemove', onPointerMove);
+
+  // Focus-stealer diagnostic. Any focus change NOT initiated by our focusItem()
+  // is recorded with a stack snippet so the HUD can reveal what pulls focus
+  // back after a failed app launch (the left/right freeze). Also count blur
+  // events that drop focus to <body> / null.
+  document.addEventListener('focusin', function (e) {
+    if (typeof window === 'undefined') return;
+    window.__NAV = window.__NAV || {};
+    if (focusingViaManager) return;
+    window.__NAV.steal = (window.__NAV.steal || 0) + 1;
+    collect();
+    window.__NAV.stealPos = items.indexOf(e.target);
+    const stack = (new Error()).stack || '';
+    // First frame after this handler is the real caller.
+    const frames = stack.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    window.__NAV.stealFrom = frames.slice(1, 4).join(' <- ');
+  }, true);
 
   return {
     refresh: function () {
