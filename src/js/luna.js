@@ -2,6 +2,26 @@ function hasWebOS() {
   return typeof window !== 'undefined' && window.webOS && window.webOS.service;
 }
 
+/**
+ * Reject if the wrapped promise doesn't settle within `ms`. Some Luna calls
+ * (root exec, subscriptions) can hang indefinitely after a failed app launch;
+ * without a timeout that would stall the whole UI refresh.
+ */
+function withTimeout(promise, ms) {
+  return new Promise(function (resolve, reject) {
+    const timer = setTimeout(function () {
+      reject(new Error('Luna call timed out'));
+    }, ms);
+    promise.then(function (value) {
+      clearTimeout(timer);
+      resolve(value);
+    }, function (err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 export function lunaRequest(uri, options) {
   const method = options.method;
   const parameters = options.parameters || {};
@@ -186,7 +206,7 @@ function normalizeListedApps(res) {
 function listAppsViaRoot() {
   const command =
     "luna-send -n 1 -f 'luna://com.webos.applicationManager/listApps' '{}'";
-  return execRoot(command).then(function (res) {
+  return withTimeout(execRoot(command), 5000).then(function (res) {
     let out = res && res.stdoutString ? String(res.stdoutString) : '';
     if (!out && res && res.stdoutBytes) {
       try { out = String(atob(res.stdoutBytes)); } catch (err) { /* ignore */ }
@@ -206,10 +226,10 @@ function listAppsViaRoot() {
 
 export function listApps() {
   return listAppsViaRoot().catch(function () {
-    return lunaSubscribeOnce('luna://com.webos.applicationManager', {
+    return withTimeout(lunaSubscribeOnce('luna://com.webos.applicationManager', {
       method: 'listLaunchPoints',
       parameters: {}
-    }).then(normalizeListedApps).then(function (result) {
+    }), 5000).then(normalizeListedApps).then(function (result) {
       if (result.apps && result.apps.length) return result;
       return lunaRequest('luna://com.webos.applicationManager', {
         method: 'listApps',

@@ -290,7 +290,11 @@ function handleVisibilityChange() {
     if (config.music && config.music.resumeOnReturn) {
       music.fadeInAndResume();
     }
-    refreshAll();
+    refreshAll().catch(function (err) {
+      // Never leave the launcher unselectable after returning from another app.
+      console.error(err);
+      focus.refresh();
+    });
   }
 }
 

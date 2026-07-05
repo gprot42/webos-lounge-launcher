@@ -109,7 +109,6 @@ export function createAppGrid(container, getConfig, options) {
   }
 
   async function refresh() {
-    container.innerHTML = '';
     const config = getConfig();
     const pinned = (config.launcher && config.launcher.pinnedApps) || [];
     const customApps = (config.launcher && config.launcher.customApps) || [];
@@ -141,9 +140,16 @@ export function createAppGrid(container, getConfig, options) {
 
     tiles.push(makeSettingsTile(pinned.length));
 
+    // Swap in the freshly built tiles atomically. Clearing the container up
+    // front instead would leave the dock empty (and unselectable) for the whole
+    // async catalog fetch above -- and if that fetch stalls after a failed app
+    // launch, the dock would stay empty and focus would never be restored.
+    const fragment = document.createDocumentFragment();
     for (const tile of tiles) {
-      container.appendChild(tile);
+      fragment.appendChild(tile);
     }
+    container.innerHTML = '';
+    container.appendChild(fragment);
   }
 
   return {
