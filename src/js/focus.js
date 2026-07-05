@@ -354,8 +354,31 @@ export function createFocusManager(root, handlers) {
     });
 
     if (best) {
-      nav.last += ' spatial->' + items.indexOf(best);
-      if (focusItem(best)) return;
+      const bestIdx = items.indexOf(best);
+      nav.last += ' spatial->' + bestIdx;
+      const ok = focusItem(best);
+      // Ground-truth diagnostics: what is actually focused right after .focus().
+      const immActive = document.activeElement;
+      nav.last += ' ok=' + (ok ? 1 : 0)
+        + ' imm=' + items.indexOf(immActive)
+        + (immActive === document.body ? '(body)' : '')
+        + (immActive === best ? '(=best)' : '');
+      // Re-collect to detect a re-sort/re-render that moves the focused node.
+      collect();
+      nav.last += ' re=' + items.indexOf(document.activeElement) + '/' + items.length;
+      // Async check: catches a revert that happens after this handler returns
+      // (timer/rAF/DOM replacement) without firing focusin.
+      if (typeof window !== 'undefined') {
+        setTimeout(function () {
+          collect();
+          window.__NAV = window.__NAV || {};
+          const a = document.activeElement;
+          window.__NAV.async = items.indexOf(a)
+            + (a === document.body ? '(body)' : '')
+            + '/' + items.length;
+        }, 120);
+      }
+      if (ok) return;
       // Spatial target refused focus (should be rare now isFocusable filters
       // the loop, but guards against ancestors going inert mid-frame). Fall
       // through to the index walk which retries subsequent candidates.

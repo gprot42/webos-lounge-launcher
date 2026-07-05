@@ -116,7 +116,8 @@ export function createDebugHud() {
       'nav=' + ((window.__NAV && window.__NAV.last) || '-'),
       'kd=' + ((window.__NAV && window.__NAV.kd) || 0) + ' raw=' + ((window.__NAV && window.__NAV.rawCode) || '-') + ' pg=' + ((window.__NAV && window.__NAV.pg) || 0),
       'steal=' + ((window.__NAV && window.__NAV.steal) || 0) + ' spos=' + ((window.__NAV && window.__NAV.stealPos) != null ? window.__NAV.stealPos : '-'),
-      'by=' + ((window.__NAV && window.__NAV.stealFrom) || '-')
+      'by=' + ((window.__NAV && window.__NAV.stealFrom) || '-'),
+      'async=' + ((window.__NAV && window.__NAV.async) != null ? window.__NAV.async : '-')
     ];
     el.textContent = lines.join('\n');
   }
