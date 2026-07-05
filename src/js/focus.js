@@ -321,6 +321,12 @@ export function createFocusManager(root, handlers) {
     let code = event.keyCode;
     resetPointerAxis();
 
+    if (typeof window !== 'undefined') {
+      window.__NAV = window.__NAV || {};
+      window.__NAV.kd = (window.__NAV.kd || 0) + 1;
+      window.__NAV.rawCode = event.keyCode + '/' + (event.key || '-');
+    }
+
     // Physical USB/Bluetooth keyboards can report different keyCodes than the
     // TV remote; normalize via event.key so keyboard navigation works too.
     if (event.key) {
