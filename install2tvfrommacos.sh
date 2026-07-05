@@ -238,6 +238,10 @@ install_ipk_ssh() {
 	version="$(read_version)"
 
 	luna_oneshot_tv 'luna://com.webos.applicationManager/closeByAppId' "{\"id\":\"${APP_ID}\"}"
+	# closeByAppId only *suspends* the web app; webOS resumes the same in-memory
+	# page (old code) on the next launch, so a plain reinstall never loads new
+	# JS/HTML. Hard-kill the WAM process for this app to force a true cold start.
+	ssh_tv "pkill -f '${APP_ID}' 2>/dev/null; true" >/dev/null 2>&1 || true
 
 	ssh_tv "rm -rf '${remote_dir}' && mkdir -p '${remote_dir}' && chmod 777 '${remote_dir}'"
 	scp -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
