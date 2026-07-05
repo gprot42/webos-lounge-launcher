@@ -534,6 +534,32 @@ export function createFocusManager(root, handlers) {
     window.__NAV.stealFrom = frames.slice(1, 4).join(' <- ');
   }, true);
 
+  // 100ms sampler: records the active-index history and how often the focused
+  // DOM node is replaced. Reveals whether focus reverts (e.g. 10>9>10) and
+  // whether a grid re-render swaps the focused node (nodeChg climbs, disc 'X').
+  if (typeof window !== 'undefined') {
+    window.__NAV = window.__NAV || {};
+    window.__NAV.hist = '';
+    let lastSampled = -2;
+    let lastNode = null;
+    setInterval(function () {
+      collect();
+      const a = document.activeElement;
+      const idx = items.indexOf(a);
+      const disc = (a && a !== document.body && !document.contains(a)) ? 'X' : '';
+      if (idx !== lastSampled) {
+        const parts = (window.__NAV.hist ? window.__NAV.hist.split(' ') : []);
+        parts.push(idx + disc);
+        window.__NAV.hist = parts.slice(-10).join(' ');
+        lastSampled = idx;
+      }
+      if (a !== lastNode) {
+        window.__NAV.nodeChg = (window.__NAV.nodeChg || 0) + 1;
+        lastNode = a;
+      }
+    }, 100);
+  }
+
   return {
     refresh: function () {
       collect();
