@@ -44,6 +44,17 @@ async function build() {
   });
 
   copyRecursive(path.join(root, 'src/index.html'), path.join(dist, 'index.html'));
+  // Cache-bust asset URLs. webOS WAM caches web resources by URL and ignores
+  // the app version bump, so without a changing query string a reinstall keeps
+  // serving the previously cached main.js/CSS. Appending ?v=<version> forces a
+  // fresh fetch on every version change.
+  const indexPath = path.join(dist, 'index.html');
+  let indexHtml = fs.readFileSync(indexPath, 'utf8');
+  indexHtml = indexHtml
+    .replace('href="styles/main.css"', 'href="styles/main.css?v=' + version + '"')
+    .replace('src="webOS.js"', 'src="webOS.js?v=' + version + '"')
+    .replace('src="main.js"', 'src="main.js?v=' + version + '"');
+  fs.writeFileSync(indexPath, indexHtml);
   copyRecursive(path.join(root, 'src/styles'), path.join(dist, 'styles'));
   copyRecursive(path.join(root, 'assets'), path.join(dist, 'assets'));
   fs.copyFileSync(path.join(root, 'version.md'), path.join(dist, 'version.md'));

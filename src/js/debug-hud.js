@@ -12,6 +12,7 @@
 // handler stops propagation or returns early. Remove once the freeze is fixed.
 
 export function createDebugHud() {
+  const VERSION = (typeof __LOUNGE_VERSION__ !== 'undefined') ? __LOUNGE_VERSION__ : 'dev';
   const el = document.createElement('div');
   el.id = 'debug-hud';
   el.style.cssText = [
@@ -104,7 +105,7 @@ export function createDebugHud() {
   function render() {
     state.beats += 1;
     const lines = [
-      'HUD beat=' + state.beats,
+      'HUD v' + VERSION + ' beat=' + state.beats,
       'vis=' + document.visibilityState + ' hidden=' + document.hidden,
       'active=' + describe(document.activeElement) + ' pos=' + focusPos(),
       'key=' + state.lastKeyCode + '/' + state.lastKeyName + ' (' + ago(state.lastKeyAt) + ' ago)',
