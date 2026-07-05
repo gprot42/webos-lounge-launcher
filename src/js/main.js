@@ -19,6 +19,8 @@ let visible = true;
 let foregroundTimer = null;
 let lastForegroundAppId = APP_ID;
 let returningToLounge = false;
+let stuckTicks = 0;
+let lastLaunchAt = 0;
 
 const elements = {
   backgroundLayer: document.getElementById('background-layer'),
@@ -79,6 +81,7 @@ const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
 });
 const apps = createAppGrid(elements.appGrid, getConfig, {
   onBeforeLaunch: function () {
+    lastLaunchAt = Date.now();
     const config = getConfig();
     if (config.music && config.music.pauseOnLaunch) {
       music.fadeOutAndPause();
@@ -344,6 +347,34 @@ function startForegroundWatcher() {
 
       if (appId && appId !== APP_ID && config.music && config.music.pauseOnLaunch) {
         music.fadeOutAndPause();
+      }
+
+      // Stuck-state recovery. If our page is still visible (webOS never sent a
+      // visibilitychange->hidden) yet the system's foreground app is not us,
+      // an app we launched grabbed input focus without actually covering the
+      // screen -- e.g. a broken "viewer" that "doesn't launch". The dock is
+      // shown but every key/pointer event now goes to that ghost window, so the
+      // launcher feels frozen. Relaunch ourselves to reclaim foreground input.
+      // Require two consecutive ticks so we never yank the user out of an app
+      // they intentionally opened (that path flips us to hidden within a tick).
+      const launchedRecently = (Date.now() - lastLaunchAt) < 30000;
+      if (visible && launchedRecently && appId && appId !== APP_ID && !returningToLounge) {
+        stuckTicks += 1;
+        if (stuckTicks >= 2) {
+          stuckTicks = 0;
+          returningToLounge = true;
+          try {
+            await launchApp(APP_ID);
+          } catch (err) {
+            // Best-effort reclaim.
+          } finally {
+            returningToLounge = false;
+          }
+          lastForegroundAppId = APP_ID;
+          return;
+        }
+      } else {
+        stuckTicks = 0;
       }
 
       await maybeReturnToLounge(appId);
