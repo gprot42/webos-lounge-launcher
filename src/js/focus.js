@@ -185,6 +185,8 @@ export function createFocusManager(root, handlers) {
   // Move to the previous/next focusable in the same row by index order.
   // Spatial navigation fails when tiles overlap or share an x-position (e.g. a
   // wrapped/stacked dock), so horizontal dock movement falls back to this.
+  // Returns false when there is no same-row neighbour (row edge) so the caller
+  // can continue across rows via moveByGlobalIndex.
   function moveByIndexInRow(active, delta) {
     const row = focusRow(active);
     const scoped = items.filter(function (item) {
@@ -193,7 +195,24 @@ export function createFocusManager(root, handlers) {
     const idx = scoped.indexOf(active);
     if (idx < 0) return false;
     const next = scoped[idx + delta];
-    if (!next) return true; // at the edge; consume the key without wrapping
+    if (!next) return false; // at the row edge; let the caller cross rows
+    focusItem(next);
+    return true;
+  }
+
+  // Final horizontal fallback: walk every focusable (except the settings
+  // overlay) in focus-index order. This guarantees left/right always advances
+  // through the launcher -- app grid, inputs, top-bar and music controls -- so
+  // focus can never dead-end at a row boundary (the "can't scroll after
+  // launching an app" freeze).
+  function moveByGlobalIndex(active, delta) {
+    const scoped = items.filter(function (item) {
+      return focusRow(item) !== 'settings';
+    });
+    const idx = scoped.indexOf(active);
+    if (idx < 0) return false;
+    const next = scoped[idx + delta];
+    if (!next) return false; // true first/last item
     focusItem(next);
     return true;
   }
@@ -266,13 +285,17 @@ export function createFocusManager(root, handlers) {
       return;
     }
 
-    // Spatial search found nothing (overlapping/stacked tiles, or an edge).
-    // For dock/input rows, fall back to index-order movement so left/right
-    // always advances through the row.
+    // Spatial search found nothing (overlapping/stacked tiles, or an edge of a
+    // row). Fall back to index-order movement: same row first, then across all
+    // rows, so left/right always advances through the launcher instead of
+    // dead-ending at a row boundary.
     if (isHorizontal) {
       const row = focusRow(active);
-      if (row === 'apps' || row === 'inputs' || row === 'other') {
-        moveByIndexInRow(active, keyCode === REMOTE_KEY.RIGHT ? 1 : -1);
+      if (row !== 'settings') {
+        const delta = keyCode === REMOTE_KEY.RIGHT ? 1 : -1;
+        if (!moveByIndexInRow(active, delta)) {
+          moveByGlobalIndex(active, delta);
+        }
       }
     }
   }
