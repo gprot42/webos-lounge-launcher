@@ -4,7 +4,7 @@ import {normalizeMusicConfig} from './builtin-music.js';
 const STORAGE_KEY = 'lounge.config.v1';
 
 export const DEFAULT_CONFIG = {
-  version: 13,
+  version: 14,
   profile: 'default',
   profiles: {},
   background: {
@@ -45,6 +45,8 @@ export const DEFAULT_CONFIG = {
     timezone: '',
     iconSize: 'medium',
     iconAlign: 'center',
+    iconLayout: 'scroll',
+    iconsPerRow: 7,
     perfMode: false,
     bootOnStart: false,
     returnOnAppExit: false
@@ -199,6 +201,17 @@ function migrateConfig(config) {
       config.launcher.perfMode = false;
     }
     config.version = 13;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 14) {
+    if (config.launcher.iconLayout !== 'wrap' && config.launcher.iconLayout !== 'scroll') {
+      config.launcher.iconLayout = 'scroll';
+    }
+    if (typeof config.launcher.iconsPerRow !== 'number') {
+      config.launcher.iconsPerRow = 7;
+    }
+    config.version = 14;
     saveConfig(config);
   }
 

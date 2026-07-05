@@ -93,6 +93,65 @@ export function getAppInfo(id) {
   });
 }
 
+/**
+ * Run a shell command through the Homebrew Channel root service. On a rooted TV
+ * with the service elevated this executes as root; otherwise it fails or runs
+ * unprivileged. Resolves with the raw exec response.
+ */
+export function execRoot(command) {
+  return lunaRequest('luna://org.webosbrew.hbchannel.service', {
+    method: 'exec',
+    parameters: {command: command}
+  });
+}
+
+/**
+ * Report the effective user privileged calls run as (e.g. "root"). Uses the
+ * Homebrew Channel root exec service. Resolves to the username string, or null
+ * when unavailable (not rooted, no Homebrew Channel, or desktop preview).
+ */
+export function whoAmI() {
+  return execRoot('id -un').then(function (res) {
+    let out = (res && res.stdoutString ? String(res.stdoutString) : '').trim();
+    if (!out && res && res.stdoutBytes) {
+      try { out = String(atob(res.stdoutBytes)).trim(); } catch (err) { /* ignore */ }
+    }
+    return out || null;
+  }).catch(function () {
+    return null;
+  });
+}
+
+function guessImageMime(path) {
+  const p = String(path).toLowerCase();
+  if (p.endsWith('.jpg') || p.endsWith('.jpeg')) return 'image/jpeg';
+  if (p.endsWith('.gif')) return 'image/gif';
+  if (p.endsWith('.webp')) return 'image/webp';
+  if (p.endsWith('.svg')) return 'image/svg+xml';
+  if (p.endsWith('.bmp')) return 'image/bmp';
+  return 'image/png';
+}
+
+/**
+ * Read an image file from the TV filesystem as a base64 data URI using the
+ * Homebrew Channel root service. Native app icons live outside the launcher's
+ * sandbox, so WAM blocks `file://` <img> loads; reading the bytes as root and
+ * inlining them is the only reliable way to display them. Resolves to a
+ * `data:` URL, or null when the file can't be read.
+ */
+export function readFileAsDataUrl(path) {
+  if (!path) return Promise.resolve(null);
+  const clean = String(path).replace(/^file:\/\//, '');
+  const command = 'cat -- "' + clean.replace(/(["$`\\])/g, '\\$1') + '"';
+  return execRoot(command).then(function (res) {
+    const b64 = res && res.stdoutBytes ? String(res.stdoutBytes).replace(/\s+/g, '') : '';
+    if (!b64) return null;
+    return 'data:' + guessImageMime(clean) + ';base64,' + b64;
+  }).catch(function () {
+    return null;
+  });
+}
+
 function normalizeListedApps(res) {
   if (!res) return {apps: []};
 
@@ -114,22 +173,55 @@ function normalizeListedApps(res) {
   return {apps: []};
 }
 
+/**
+ * List every installed app via the Homebrew Channel root service.
+ *
+ * A sandboxed web app cannot call the privileged
+ * `com.webos.applicationManager/listApps` method directly, so on retail webOS
+ * the in-app subscription only returns a handful (or zero) apps. Running
+ * `luna-send` through the elevated Homebrew Channel exec service performs the
+ * call as root and returns the full, unfiltered list. Rejects when the service
+ * is unavailable or the output can't be parsed, so callers can fall back.
+ */
+function listAppsViaRoot() {
+  const command =
+    "luna-send -n 1 -f 'luna://com.webos.applicationManager/listApps' '{}'";
+  return execRoot(command).then(function (res) {
+    let out = res && res.stdoutString ? String(res.stdoutString) : '';
+    if (!out && res && res.stdoutBytes) {
+      try { out = String(atob(res.stdoutBytes)); } catch (err) { /* ignore */ }
+    }
+    out = out.trim();
+    if (!out) throw new Error('empty listApps output');
+
+    const data = JSON.parse(out);
+    if (data && data.returnValue === false) {
+      throw new Error(data.errorText || 'listApps failed');
+    }
+    const normalized = normalizeListedApps(data);
+    if (!normalized.apps.length) throw new Error('no apps returned');
+    return normalized;
+  });
+}
+
 export function listApps() {
-  return lunaSubscribeOnce('luna://com.webos.applicationManager', {
-    method: 'listLaunchPoints',
-    parameters: {}
-  }).then(normalizeListedApps).then(function (result) {
-    if (result.apps && result.apps.length) return result;
-    return lunaRequest('luna://com.webos.applicationManager', {
-      method: 'listApps',
+  return listAppsViaRoot().catch(function () {
+    return lunaSubscribeOnce('luna://com.webos.applicationManager', {
+      method: 'listLaunchPoints',
       parameters: {}
-    }).then(normalizeListedApps);
-  }).catch(function () {
-    return lunaRequest('luna://com.webos.applicationManager', {
-      method: 'listApps',
-      parameters: {}
-    }).then(normalizeListedApps).catch(function () {
-      return {apps: []};
+    }).then(normalizeListedApps).then(function (result) {
+      if (result.apps && result.apps.length) return result;
+      return lunaRequest('luna://com.webos.applicationManager', {
+        method: 'listApps',
+        parameters: {}
+      }).then(normalizeListedApps);
+    }).catch(function () {
+      return lunaRequest('luna://com.webos.applicationManager', {
+        method: 'listApps',
+        parameters: {}
+      }).then(normalizeListedApps).catch(function () {
+        return {apps: []};
+      });
     });
   });
 }

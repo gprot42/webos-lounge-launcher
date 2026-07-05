@@ -33,6 +33,13 @@ export function createFocusManager(root, handlers) {
   function focusItem(el) {
     if (!el) return;
     el.focus();
+    if (el.scrollIntoView) {
+      try {
+        el.scrollIntoView({block: 'nearest', inline: 'nearest'});
+      } catch (err) {
+        el.scrollIntoView(false);
+      }
+    }
     el.classList.add('focused');
     items.forEach(function (item) {
       if (item !== el) item.classList.remove('focused');
@@ -87,6 +94,7 @@ export function createFocusManager(root, handlers) {
       ? event.target.closest('.focusable:not([disabled])')
       : null;
     if (!target) return;
+    if (target.dataset && target.dataset.pointerFocus === 'off') return;
     if (shouldIgnorePointerTarget(target)) return;
     focusItem(target);
   }

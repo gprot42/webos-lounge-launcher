@@ -226,6 +226,30 @@ async function applyUsbOverrides() {
   }
 }
 
+// Icon row layout: 'scroll' keeps a single horizontal row capped to N icons
+// (the rest reachable by scrolling left/right), 'wrap' lets icons stack onto
+// multiple rows. Scroll is the default.
+function applyIconLayout() {
+  const grid = elements.appGrid;
+  const launcher = elements.launcher;
+  if (!grid || !launcher) return;
+  const config = getConfig();
+  const layout = (config.launcher && config.launcher.iconLayout) || 'scroll';
+  launcher.classList.toggle('layout-scroll', layout === 'scroll');
+  launcher.classList.toggle('layout-wrap', layout !== 'scroll');
+  if (layout === 'scroll') {
+    const scaleBySize = {small: 0.78, medium: 1, large: 1.28};
+    const iconSize = (config.launcher && config.launcher.iconSize) || 'medium';
+    const scale = scaleBySize[iconSize] || 1;
+    let perRow = parseInt(config.launcher && config.launcher.iconsPerRow, 10) || 7;
+    perRow = Math.min(Math.max(perRow, 3), 12);
+    const tileFootprint = (152 * scale) + 28; // tile width + 14px*2 margins
+    grid.style.maxWidth = Math.round(perRow * tileFootprint) + 'px';
+  } else {
+    grid.style.maxWidth = '';
+  }
+}
+
 function applyIconAlign() {
   if (!elements.launcher) return;
   const config = getConfig();
@@ -235,6 +259,9 @@ function applyIconAlign() {
   elements.launcher.classList.add(cls);
 }
 
+// When a user on a weaker TV enables Performance mode, the glassmorphic blur and
+// animated background are disabled for smoother rendering, while the layout stays
+// intact (see the `.perf-mode` rules in styles/main.css).
 function applyPerfMode() {
   const config = getConfig();
   const on = !!(config.launcher && config.launcher.perfMode);
@@ -249,6 +276,7 @@ async function refreshAll() {
   await background.refresh();
   await inputs.refresh();
   await apps.refresh();
+  applyIconLayout();
   await music.loadTracks();
   focus.refresh();
 }

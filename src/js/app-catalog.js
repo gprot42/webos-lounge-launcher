@@ -1,5 +1,60 @@
-import {getAppInfo, listApps} from './luna.js';
+import {getAppInfo, listApps, readFileAsDataUrl} from './luna.js';
 import {getAppIdCandidates, getBuiltinAppIcon, getBuiltinAppTitle} from './app-icons.js';
+
+// Cache of resolved native icons (file:// path -> data URI or '' when it failed)
+// so repeated renders don't re-read the same file over the root bus.
+const nativeIconCache = new Map();
+
+/**
+ * Point an <img> at an app icon. Bundled/remote icons are set directly; native
+ * icons (file:// paths outside the sandbox) are read as root and inlined as a
+ * data URI, because WAM blocks direct file:// <img> loads. On failure the
+ * original value is set so the element's own error/fallback handler still runs.
+ */
+export function setIconSrc(imgEl, iconUrl) {
+  if (!imgEl || !iconUrl) return;
+  if (iconUrl.indexOf('file://') !== 0) {
+    imgEl.src = iconUrl;
+    return;
+  }
+  if (nativeIconCache.has(iconUrl)) {
+    imgEl.src = nativeIconCache.get(iconUrl) || iconUrl;
+    return;
+  }
+  readFileAsDataUrl(iconUrl).then(function (dataUrl) {
+    nativeIconCache.set(iconUrl, dataUrl || '');
+    imgEl.src = dataUrl || iconUrl;
+  }).catch(function () {
+    imgEl.src = iconUrl;
+  });
+}
+
+/**
+ * Like setIconSrc, but defers reading native icons until the <img> scrolls into
+ * view. This avoids firing a root file read for every row in a long list up
+ * front (which stalls low-spec TVs and can leave icons blank), and reloads them
+ * reliably as the user scrolls. Falls back to eager loading when
+ * IntersectionObserver is unavailable or the icon is already cached/non-native.
+ */
+export function lazyLoadIcon(imgEl, iconUrl, scrollRoot) {
+  if (!imgEl || !iconUrl) return;
+  const isNative = iconUrl.indexOf('file://') === 0;
+  if (!isNative || nativeIconCache.has(iconUrl) ||
+      typeof IntersectionObserver === 'undefined') {
+    setIconSrc(imgEl, iconUrl);
+    return;
+  }
+  const observer = new IntersectionObserver(function (entries) {
+    for (let i = 0; i < entries.length; i += 1) {
+      if (entries[i].isIntersecting) {
+        observer.disconnect();
+        setIconSrc(imgEl, iconUrl);
+        return;
+      }
+    }
+  }, {root: scrollRoot || null, rootMargin: '160px'});
+  observer.observe(imgEl);
+}
 
 const APP_INSTALL_ROOTS = [
   '/media/cryptofs/apps/usr/palm/applications',

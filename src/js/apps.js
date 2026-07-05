@@ -1,5 +1,5 @@
 import {launchApp, listApps} from './luna.js';
-import {loadAppCatalog, normalizeAppRecord, resolvePinnedApp} from './app-catalog.js';
+import {loadAppCatalog, normalizeAppRecord, resolvePinnedApp, setIconSrc} from './app-catalog.js';
 import {getAppIdCandidates, getBuiltinAppIcon} from './app-icons.js';
 
 const APP_ID = 'org.webosbrew.lounge.launcher';
@@ -22,7 +22,6 @@ export function createAppGrid(container, getConfig, options) {
     if (app.icon) {
       const img = document.createElement('img');
       img.className = 'app-icon';
-      img.src = app.icon;
       img.alt = '';
       img.addEventListener('error', function () {
         const fallbackIcon = getBuiltinAppIcon(app.id);
@@ -36,6 +35,7 @@ export function createAppGrid(container, getConfig, options) {
         fallback.textContent = app.title.slice(0, 2).toUpperCase();
         button.insertBefore(fallback, label);
       });
+      setIconSrc(img, app.icon);
       button.appendChild(img);
     } else {
       const fallback = document.createElement('span');

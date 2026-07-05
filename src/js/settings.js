@@ -1,12 +1,13 @@
 import {saveConfig, TIMEZONE_OPTIONS} from './config.js';
 import {listInstalledApps} from './apps.js';
-import {loadAppCatalog, resolvePinnedApp} from './app-catalog.js';
+import {loadAppCatalog, resolvePinnedApp, setIconSrc, lazyLoadIcon} from './app-catalog.js';
 import {KNOWN_BUILTIN_APPS, getBuiltinAppIcon, getBuiltinAppTitle, BUILTIN_ICON_CHOICES} from './app-icons.js';
 import {loadBuiltinManifest, normalizeBackgroundConfig, parseUrlList} from './backgrounds.js';
 import {loadBuiltinMusicManifest, normalizeMusicConfig} from './builtin-music.js';
 import {applyActiveProfile, PROFILE_OPTIONS} from './profiles.js';
 import {fetchInputDevices} from './inputs.js';
 import {findLoungeRoots, joinPath} from './usb.js';
+import {whoAmI} from './luna.js';
 import {APP_VERSION} from './version.js';
 
 const DEFAULT_INPUTS = ['HDMI_1', 'HDMI_2', 'HDMI_3', 'TV'];
@@ -277,8 +278,30 @@ export function createSettingsPanel(panel, getConfig, options) {
     versionLabel.className = 'settings-version';
     versionLabel.textContent = 'Version ' + APP_VERSION;
 
+    // Effective user the launcher runs privileged calls as (root when the
+    // Homebrew Channel service is elevated). Tells the user whether app scanning,
+    // which needs root, will work. Populated asynchronously via the Luna bus.
+    const runUserLabel = document.createElement('p');
+    runUserLabel.className = 'settings-run-user run-user-checking';
+    runUserLabel.textContent = 'Running as: checking…';
+    whoAmI().then(function (user) {
+      if (!user) {
+        runUserLabel.textContent = 'Running as: unknown (not rooted / no Homebrew Channel)';
+        runUserLabel.className = 'settings-run-user run-user-limited';
+        return;
+      }
+      const isRoot = user === 'root';
+      runUserLabel.textContent = 'Running as: ' + user +
+        (isRoot ? ' — app scanning available' : ' — not root, app scanning may be limited');
+      runUserLabel.className = 'settings-run-user ' + (isRoot ? 'run-user-root' : 'run-user-limited');
+    }).catch(function () {
+      runUserLabel.textContent = 'Running as: unknown';
+      runUserLabel.className = 'settings-run-user run-user-limited';
+    });
+
     headerTitleWrap.appendChild(headerTitle);
     headerTitleWrap.appendChild(versionLabel);
+    headerTitleWrap.appendChild(runUserLabel);
 
     const headerActions = document.createElement('div');
     headerActions.className = 'settings-header-actions';
@@ -593,6 +616,20 @@ export function createSettingsPanel(panel, getConfig, options) {
     ], config.launcher.iconAlign || 'center');
     launcherSection.appendChild(labeledControl('Icon alignment', iconAlignSelect));
 
+    const iconLayoutSelect = createOptionStepper('', 92061, [
+      {value: 'scroll', label: 'Scroll one row'},
+      {value: 'wrap', label: 'Stacked rows'}
+    ], config.launcher.iconLayout || 'scroll');
+    launcherSection.appendChild(labeledControl('Icon layout', iconLayoutSelect));
+
+    const perRowValue = config.launcher.iconsPerRow || 7;
+    const iconsPerRowSelect = createOptionStepper('', 92062, [
+      {value: '4', label: '4'}, {value: '5', label: '5'}, {value: '6', label: '6'},
+      {value: '7', label: '7'}, {value: '8', label: '8'}, {value: '9', label: '9'},
+      {value: '10', label: '10'}, {value: '11', label: '11'}, {value: '12', label: '12'}
+    ], String(perRowValue));
+    launcherSection.appendChild(labeledControl('Icons per row (scroll mode)', iconsPerRowSelect));
+
     const perfModeToggle = document.createElement('input');
     perfModeToggle.type = 'checkbox';
     perfModeToggle.checked = !!config.launcher.perfMode;
@@ -767,9 +804,9 @@ export function createSettingsPanel(panel, getConfig, options) {
         if (app.icon) {
           const icon = document.createElement('img');
           icon.className = 'settings-app-icon';
-          icon.src = app.icon;
           icon.alt = '';
           icon.addEventListener('error', function () { icon.remove(); });
+          lazyLoadIcon(icon, app.icon, discoverList);
           row.appendChild(icon);
         }
 
@@ -780,6 +817,7 @@ export function createSettingsPanel(panel, getConfig, options) {
         addBtn.type = 'button';
         addBtn.className = 'settings-mini-btn focusable';
         addBtn.dataset.focusIndex = String(1210 + index);
+        addBtn.dataset.pointerFocus = 'off';
         addBtn.textContent = '+';
         addBtn.addEventListener('click', function () {
           const override = discoverIconSelect.value;
@@ -855,6 +893,8 @@ export function createSettingsPanel(panel, getConfig, options) {
       config.launcher.timezone = timezoneSelect.value;
       config.launcher.iconSize = iconSizeSelect.value;
       config.launcher.iconAlign = iconAlignSelect.value;
+      config.launcher.iconLayout = iconLayoutSelect.value;
+      config.launcher.iconsPerRow = parseInt(iconsPerRowSelect.value, 10) || 7;
       config.launcher.perfMode = perfModeToggle.checked;
       config.launcher.returnOnAppExit = returnToggle.checked;
       config.launcher.bootOnStart = bootToggle.checked;
@@ -1013,8 +1053,9 @@ export function createSettingsPanel(panel, getConfig, options) {
       if (app.icon) {
         const icon = document.createElement('img');
         icon.className = 'settings-app-icon';
-        icon.src = app.icon;
         icon.alt = '';
+        icon.addEventListener('error', function () { icon.remove(); });
+        lazyLoadIcon(icon, app.icon, addContainer);
         row.appendChild(icon);
       }
 
@@ -1025,6 +1066,7 @@ export function createSettingsPanel(panel, getConfig, options) {
       addBtn.type = 'button';
       addBtn.className = 'settings-mini-btn focusable';
       addBtn.dataset.focusIndex = String(980 + index);
+      addBtn.dataset.pointerFocus = 'off';
       addBtn.textContent = '+';
       addBtn.addEventListener('click', function () {
         pinnedOrder.push(app.id);

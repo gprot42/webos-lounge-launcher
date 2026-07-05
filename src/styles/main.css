@@ -94,6 +94,37 @@ body {
   gap: 16px;
 }
 
+.settings-run-user {
+  margin: 8px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.settings-run-user::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.run-user-checking {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.run-user-root {
+  color: #7ee2a8;
+}
+
+.run-user-limited {
+  color: #f2c078;
+}
+
 .settings-icon {
   flex: 0 0 auto;
   width: 64px;
@@ -199,6 +230,31 @@ body {
 .launcher.icons-right .input-row,
 .launcher.icons-right .app-grid {
   justify-content: flex-end;
+}
+
+/* Single horizontal row, capped to N icons; overflow scrolls left/right. */
+.launcher.layout-scroll .app-grid {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  justify-content: flex-start;
+  margin-left: auto;
+  margin-right: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.launcher.layout-scroll .app-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.launcher.layout-scroll .app-grid > * {
+  flex: 0 0 auto;
+}
+
+/* Stacked: icons wrap onto multiple rows. */
+.launcher.layout-wrap .app-grid {
+  flex-wrap: wrap;
 }
 
 .input-row {
@@ -762,6 +818,11 @@ body {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
   font-size: 20px;
+  transition: background 0.12s ease;
+}
+
+.settings-app-row:hover {
+  background: rgba(255, 200, 150, 0.16);
 }
 
 .settings-app-row > * + * {
@@ -842,7 +903,9 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
-/* Performance mode: strip GPU-heavy effects for low-spec TVs (e.g. LG B4). */
+/* Performance mode: when a user on a weaker TV enables it, the glassmorphic blur
+   and animated background are disabled for smoother rendering, while the layout
+   stays intact. Strips GPU-heavy effects for low-spec TVs (e.g. LG B4). */
 .perf-mode * {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
