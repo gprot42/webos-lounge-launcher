@@ -210,8 +210,30 @@ export function createFocusManager(root, handlers) {
   }
 
   function onKeyDown(event) {
-    const code = event.keyCode;
+    let code = event.keyCode;
     resetPointerAxis();
+
+    // Physical USB/Bluetooth keyboards can report different keyCodes than the
+    // TV remote; normalize via event.key so keyboard navigation works too.
+    if (event.key) {
+      const active = document.activeElement;
+      const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+      const keyMap = {
+        ArrowLeft: REMOTE_KEY.LEFT,
+        ArrowUp: REMOTE_KEY.UP,
+        ArrowRight: REMOTE_KEY.RIGHT,
+        ArrowDown: REMOTE_KEY.DOWN,
+        Enter: REMOTE_KEY.ENTER,
+        Escape: REMOTE_KEY.BACK,
+        GoBack: REMOTE_KEY.BACK
+      };
+      if (!typing) {
+        keyMap.Backspace = REMOTE_KEY.BACK;
+      }
+      if (keyMap[event.key] !== undefined) {
+        code = keyMap[event.key];
+      }
+    }
 
     if (code === REMOTE_KEY.BACK) {
       if (handlers && handlers.onBack) {

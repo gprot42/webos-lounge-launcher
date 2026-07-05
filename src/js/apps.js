@@ -154,11 +154,13 @@ export function createAppGrid(container, getConfig, options) {
   };
 }
 
-export async function listInstalledApps() {
+export async function listInstalledApps(options) {
+  const includeHidden = !!(options && options.includeHidden);
   try {
     const res = await listApps();
     return (res.apps || [])
       .filter(function (app) {
+        if (includeHidden) return true;
         const record = (app && app.appInfo) || app || {};
         return record.visible !== false;
       })

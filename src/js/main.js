@@ -235,9 +235,16 @@ function applyIconAlign() {
   elements.launcher.classList.add(cls);
 }
 
+function applyPerfMode() {
+  const config = getConfig();
+  const on = !!(config.launcher && config.launcher.perfMode);
+  document.body.classList.toggle('perf-mode', on);
+}
+
 async function refreshAll() {
   updateClock();
   applyIconAlign();
+  applyPerfMode();
   music.applyConfig();
   await background.refresh();
   await inputs.refresh();

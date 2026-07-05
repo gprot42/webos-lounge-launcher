@@ -35,6 +35,50 @@ function tryLunaRequest(uri, options) {
   });
 }
 
+/**
+ * Some applicationManager list methods only return data through a subscription
+ * on retail webOS. Open a subscribe request, resolve on the first payload, then
+ * cancel so we behave like a one-shot call.
+ */
+function lunaSubscribeOnce(uri, options) {
+  const method = options.method;
+  const parameters = Object.assign({subscribe: true}, options.parameters || {});
+
+  return new Promise(function (resolve, reject) {
+    if (!hasWebOS()) {
+      reject(new Error('webOS Luna bus unavailable'));
+      return;
+    }
+
+    let settled = false;
+    let handle = null;
+
+    function finish(fn, value) {
+      if (settled) return;
+      settled = true;
+      if (handle && typeof handle.cancel === 'function') {
+        try { handle.cancel(); } catch (err) { /* ignore */ }
+      }
+      fn(value);
+    }
+
+    handle = window.webOS.service.request(uri, {
+      method: method,
+      parameters: parameters,
+      onSuccess: function (res) {
+        if (res && res.returnValue === false) {
+          finish(reject, new Error(res.errorText || 'Luna call failed'));
+          return;
+        }
+        finish(resolve, res || {});
+      },
+      onFailure: function (err) {
+        finish(reject, err || new Error('Luna call failed'));
+      }
+    });
+  });
+}
+
 export function launchApp(id) {
   return lunaRequest('luna://com.webos.applicationManager', {
     method: 'launch',
@@ -71,14 +115,22 @@ function normalizeListedApps(res) {
 }
 
 export function listApps() {
-  return lunaRequest('luna://com.webos.applicationManager', {
-    method: 'listApps',
+  return lunaSubscribeOnce('luna://com.webos.applicationManager', {
+    method: 'listLaunchPoints',
     parameters: {}
-  }).then(normalizeListedApps).catch(function () {
+  }).then(normalizeListedApps).then(function (result) {
+    if (result.apps && result.apps.length) return result;
     return lunaRequest('luna://com.webos.applicationManager', {
-      method: 'listLaunchPoints',
+      method: 'listApps',
       parameters: {}
     }).then(normalizeListedApps);
+  }).catch(function () {
+    return lunaRequest('luna://com.webos.applicationManager', {
+      method: 'listApps',
+      parameters: {}
+    }).then(normalizeListedApps).catch(function () {
+      return {apps: []};
+    });
   });
 }
 

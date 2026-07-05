@@ -593,6 +593,13 @@ export function createSettingsPanel(panel, getConfig, options) {
     ], config.launcher.iconAlign || 'center');
     launcherSection.appendChild(labeledControl('Icon alignment', iconAlignSelect));
 
+    const perfModeToggle = document.createElement('input');
+    perfModeToggle.type = 'checkbox';
+    perfModeToggle.checked = !!config.launcher.perfMode;
+    perfModeToggle.className = 'focusable';
+    perfModeToggle.dataset.focusIndex = '9207';
+    launcherSection.appendChild(labeledControl('Performance mode (low-spec TVs)', perfModeToggle));
+
     const returnToggle = document.createElement('input');
     returnToggle.type = 'checkbox';
     returnToggle.checked = !!config.launcher.returnOnAppExit;
@@ -702,6 +709,121 @@ export function createSettingsPanel(panel, getConfig, options) {
     customSection.appendChild(addCustomBtn);
     body.appendChild(customSection);
 
+    const discoverSection = document.createElement('section');
+    discoverSection.className = 'settings-section';
+    discoverSection.innerHTML = '<h3>Discover apps</h3><p class="settings-hint">Scan this TV for installed apps, then add any of them to the dock. Discovered apps keep their own icon unless you pick a bundled one below.</p>';
+
+    const scanBtn = document.createElement('button');
+    scanBtn.type = 'button';
+    scanBtn.className = 'settings-mini-btn settings-scan-btn focusable';
+    scanBtn.dataset.focusIndex = '1200';
+    scanBtn.textContent = 'Scan for apps';
+    discoverSection.appendChild(scanBtn);
+
+    const discoverIconSelect = createOptionStepper(
+      '',
+      1201,
+      [{value: '', label: 'Use native icon'}].concat(BUILTIN_ICON_CHOICES),
+      '',
+      null
+    );
+    discoverSection.appendChild(labeledControl('Icon override', discoverIconSelect));
+
+    const discoverStatus = document.createElement('p');
+    discoverStatus.className = 'settings-hint';
+    discoverSection.appendChild(discoverStatus);
+
+    const discoverList = document.createElement('div');
+    discoverList.className = 'settings-apps';
+    discoverSection.appendChild(discoverList);
+    body.appendChild(discoverSection);
+
+    let discovered = [];
+
+    function inDock(appId) {
+      if (pinnedOrder.indexOf(appId) >= 0) return true;
+      for (let i = 0; i < customApps.length; i += 1) {
+        if (customApps[i].launchId === appId) return true;
+      }
+      return false;
+    }
+
+    function renderDiscoverList() {
+      discoverList.innerHTML = '';
+      if (!discovered.length) return;
+
+      const available = discovered.filter(function (app) {
+        return app && app.id && !inDock(app.id);
+      });
+
+      discoverStatus.textContent = available.length
+        ? 'Found ' + discovered.length + ' apps.'
+        : 'All discovered apps are already in your dock.';
+
+      available.forEach(function (app, index) {
+        const row = document.createElement('div');
+        row.className = 'settings-app-row';
+
+        if (app.icon) {
+          const icon = document.createElement('img');
+          icon.className = 'settings-app-icon';
+          icon.src = app.icon;
+          icon.alt = '';
+          icon.addEventListener('error', function () { icon.remove(); });
+          row.appendChild(icon);
+        }
+
+        const title = document.createElement('span');
+        title.textContent = app.title || app.id;
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'settings-mini-btn focusable';
+        addBtn.dataset.focusIndex = String(1210 + index);
+        addBtn.textContent = '+';
+        addBtn.addEventListener('click', function () {
+          const override = discoverIconSelect.value;
+          if (override) {
+            const id = 'custom:' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+            customApps.push({id: id, launchId: app.id, title: app.title || app.id, icon: override});
+            pinnedOrder.push(id);
+          } else {
+            pinnedOrder.push(app.id);
+          }
+          loadAppsLists(pinnedList, addAppsList, config);
+          renderDiscoverList();
+        });
+
+        row.appendChild(title);
+        row.appendChild(addBtn);
+        discoverList.appendChild(row);
+      });
+    }
+
+    let scanning = false;
+    scanBtn.addEventListener('click', async function () {
+      if (scanning) return;
+      scanning = true;
+      scanBtn.disabled = true;
+      discoverStatus.textContent = 'Scanning\u2026';
+      try {
+        discovered = await listInstalledApps({includeHidden: true});
+        discovered.sort(function (a, b) {
+          return (a.title || a.id).localeCompare(b.title || b.id);
+        });
+        if (!discovered.length) {
+          discoverStatus.textContent = 'No apps found on this TV.';
+        } else {
+          renderDiscoverList();
+        }
+      } catch (err) {
+        discoverStatus.textContent = 'Could not scan for apps.';
+      } finally {
+        scanning = false;
+        scanBtn.disabled = false;
+      }
+    });
+
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'settings-save focusable';
@@ -733,6 +855,7 @@ export function createSettingsPanel(panel, getConfig, options) {
       config.launcher.timezone = timezoneSelect.value;
       config.launcher.iconSize = iconSizeSelect.value;
       config.launcher.iconAlign = iconAlignSelect.value;
+      config.launcher.perfMode = perfModeToggle.checked;
       config.launcher.returnOnAppExit = returnToggle.checked;
       config.launcher.bootOnStart = bootToggle.checked;
       config.launcher.pinnedApps = pinnedOrder.slice();
@@ -865,8 +988,13 @@ export function createSettingsPanel(panel, getConfig, options) {
       return (a.title || a.id).localeCompare(b.title || b.id);
     });
 
+    const customLaunchIds = {};
+    customApps.forEach(function (entry) {
+      if (entry && entry.launchId) customLaunchIds[entry.launchId] = true;
+    });
+
     const remaining = candidates.filter(function (app) {
-      return pinnedOrder.indexOf(app.id) < 0;
+      return pinnedOrder.indexOf(app.id) < 0 && !customLaunchIds[app.id];
     });
 
     if (!remaining.length) {
