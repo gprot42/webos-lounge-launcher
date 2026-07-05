@@ -8,7 +8,7 @@ import {createAppGrid} from './apps.js';
 import {createInputRow} from './inputs.js';
 import {createFocusManager} from './focus.js';
 import {createSettingsPanel} from './settings.js';
-import {getForegroundApp, launchApp, listApps} from './luna.js';
+import {getForegroundApp, launchApp, listApps, closeApp} from './luna.js';
 import {isHomeApp} from './remote.js';
 import {isTerminalAppId, getAppIdCandidates} from './app-icons.js';
 
@@ -358,9 +358,11 @@ function startForegroundWatcher() {
       // Ghost-focus recovery.
       //
       // Symptom (confirmed on-device): the user launches an app from the dock
-      // (e.g. a "viewer"/media app) which grabs REMOTE INPUT but never takes the
-      // graphics foreground -- so our launcher stays fully visible on top yet
-      // receives zero key events and feels frozen.
+      // (e.g. a "viewer"/media app) that FAILS to fully launch -- it grabs the
+      // REMOTE INPUT but never takes the graphics foreground -- so our launcher
+      // stays fully visible on top yet receives no usable remote navigation and
+      // feels frozen. The pointer still works because pointer events route by
+      // screen position, but arrow keys go to the dead app surface.
       //
       // We detect this precisely:
       //   - launchPending          : the user launched something from our dock
@@ -371,12 +373,23 @@ function startForegroundWatcher() {
       // This excludes apps opened normally (they fire visibilitychange->hidden,
       // setting wentHiddenSinceLaunch) and benign failed launches (nothing
       // actually launched, so the foreground app stays us). In those cases we
-      // must NOT relaunch, or we'd yank the user out of their app.
+      // must NOT act, or we'd yank the user out of their app.
+      //
+      // Recovery: CLOSE the stuck app first -- relaunching ourselves alone is
+      // not enough because webOS keeps input routed to that app's surface until
+      // it is torn down -- then bring ourselves back to the foreground and
+      // reclaim DOM focus. We deliberately do NOT clear launchPending here: if
+      // the close/relaunch didn't take, the next poll retries until the
+      // foreground is us again (self-healing) or the 15s launch window expires.
       if (launchPending && !wentHiddenSinceLaunch && visible &&
           appId && appId !== APP_ID && !returningToLounge &&
           (Date.now() - launchAt) > 2500) {
-        launchPending = false;
         returningToLounge = true;
+        try {
+          await closeApp(appId);
+        } catch (err) {
+          // The stuck app may already be gone; keep going.
+        }
         try {
           await launchApp(APP_ID);
         } catch (err) {
@@ -384,6 +397,7 @@ function startForegroundWatcher() {
         } finally {
           returningToLounge = false;
         }
+        reclaimInput();
         lastForegroundAppId = APP_ID;
         return;
       }
