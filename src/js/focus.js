@@ -219,15 +219,23 @@ export function createFocusManager(root, handlers) {
 
   function moveDirection(keyCode) {
     collect();
-    if (!items.length) return;
+    const nav = (typeof window !== 'undefined') ? (window.__NAV = window.__NAV || {}) : {};
+    const dirName = keyCode === REMOTE_KEY.LEFT ? 'L'
+      : keyCode === REMOTE_KEY.RIGHT ? 'R'
+      : keyCode === REMOTE_KEY.UP ? 'U'
+      : keyCode === REMOTE_KEY.DOWN ? 'D' : '?';
+    if (!items.length) { nav.last = dirName + ' noItems'; return; }
 
     resetPointerAxis();
 
     const active = document.activeElement;
-    if (!active || items.indexOf(active) < 0) {
+    const fromIdx = items.indexOf(active);
+    if (!active || fromIdx < 0) {
+      nav.last = dirName + ' reset from=' + fromIdx + ' n=' + items.length;
       focusItem(items[0]);
       return;
     }
+    nav.last = dirName + ' from=' + fromIdx + '/' + items.length + ' row=' + focusRow(active);
 
     const isHorizontal = keyCode === REMOTE_KEY.LEFT || keyCode === REMOTE_KEY.RIGHT;
     const isVertical = keyCode === REMOTE_KEY.UP || keyCode === REMOTE_KEY.DOWN;
@@ -281,6 +289,7 @@ export function createFocusManager(root, handlers) {
     });
 
     if (best) {
+      nav.last += ' spatial->' + items.indexOf(best);
       focusItem(best);
       return;
     }
@@ -293,10 +302,18 @@ export function createFocusManager(root, handlers) {
       const row = focusRow(active);
       if (row !== 'settings') {
         const delta = keyCode === REMOTE_KEY.RIGHT ? 1 : -1;
-        if (!moveByIndexInRow(active, delta)) {
-          moveByGlobalIndex(active, delta);
+        if (moveByIndexInRow(active, delta)) {
+          nav.last += ' rowIdx->' + items.indexOf(document.activeElement);
+        } else if (moveByGlobalIndex(active, delta)) {
+          nav.last += ' global->' + items.indexOf(document.activeElement);
+        } else {
+          nav.last += ' edge(noMove)';
         }
+      } else {
+        nav.last += ' settingsRow(noMove)';
       }
+    } else {
+      nav.last += ' vertNoBest';
     }
   }
 
@@ -374,24 +391,17 @@ export function createFocusManager(root, handlers) {
       return;
     }
 
-    if (code === REMOTE_KEY.LEFT) {
+    if (code === REMOTE_KEY.LEFT || code === REMOTE_KEY.RIGHT
+      || code === REMOTE_KEY.UP || code === REMOTE_KEY.DOWN) {
       event.preventDefault();
-      moveDirection(REMOTE_KEY.LEFT);
-      return;
-    }
-    if (code === REMOTE_KEY.RIGHT) {
-      event.preventDefault();
-      moveDirection(REMOTE_KEY.RIGHT);
-      return;
-    }
-    if (code === REMOTE_KEY.UP) {
-      event.preventDefault();
-      moveDirection(REMOTE_KEY.UP);
-      return;
-    }
-    if (code === REMOTE_KEY.DOWN) {
-      event.preventDefault();
-      moveDirection(REMOTE_KEY.DOWN);
+      try {
+        moveDirection(code);
+      } catch (err) {
+        if (typeof window !== 'undefined') {
+          window.__NAV = window.__NAV || {};
+          window.__NAV.last = 'ERR ' + (err && err.message ? err.message : err);
+        }
+      }
       return;
     }
     if (code === REMOTE_KEY.ENTER) {

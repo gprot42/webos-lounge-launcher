@@ -112,7 +112,8 @@ export function createDebugHud() {
       'keys L=' + state.cL + ' R=' + state.cR + ' U=' + state.cU + ' D=' + state.cD + ' OK=' + state.cE,
       'ptr=' + ago(state.lastPtrAt) + ' ago',
       'click=' + state.lastClickTarget + ' (' + ago(state.lastClickAt) + ' ago)',
-      'fgApp=' + state.fgApp + ' (' + ago(state.fgAt) + ' ago)'
+      'fgApp=' + state.fgApp + ' (' + ago(state.fgAt) + ' ago)',
+      'nav=' + ((window.__NAV && window.__NAV.last) || '-')
     ];
     el.textContent = lines.join('\n');
   }
