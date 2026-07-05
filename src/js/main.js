@@ -11,6 +11,7 @@ import {createSettingsPanel} from './settings.js';
 import {getForegroundApp, launchApp, listApps} from './luna.js';
 import {isHomeApp} from './remote.js';
 import {isTerminalAppId, getAppIdCandidates} from './app-icons.js';
+import {createDebugHud} from './debug-hud.js';
 
 const APP_ID = 'org.webosbrew.lounge.launcher';
 
@@ -21,6 +22,7 @@ let lastForegroundAppId = APP_ID;
 let returningToLounge = false;
 let stuckTicks = 0;
 let lastLaunchAt = 0;
+let debugHud = null;
 
 const elements = {
   backgroundLayer: document.getElementById('background-layer'),
@@ -344,6 +346,7 @@ function startForegroundWatcher() {
       const res = await getForegroundApp();
       const appId = res.appId || res.id || '';
       const config = getConfig();
+      if (debugHud) debugHud.setForeground(appId);
 
       if (appId && appId !== APP_ID && config.music && config.music.pauseOnLaunch) {
         music.fadeOutAndPause();
@@ -415,6 +418,7 @@ async function autoEnableTerminal() {
 }
 
 async function init() {
+  debugHud = createDebugHud();
   await applyUsbOverrides();
   await autoEnableTerminal();
   updateClock();
