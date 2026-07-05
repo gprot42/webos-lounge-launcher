@@ -182,6 +182,22 @@ export function createFocusManager(root, handlers) {
     return false;
   }
 
+  // Move to the previous/next focusable in the same row by index order.
+  // Spatial navigation fails when tiles overlap or share an x-position (e.g. a
+  // wrapped/stacked dock), so horizontal dock movement falls back to this.
+  function moveByIndexInRow(active, delta) {
+    const row = focusRow(active);
+    const scoped = items.filter(function (item) {
+      return focusRow(item) === row;
+    });
+    const idx = scoped.indexOf(active);
+    if (idx < 0) return false;
+    const next = scoped[idx + delta];
+    if (!next) return true; // at the edge; consume the key without wrapping
+    focusItem(next);
+    return true;
+  }
+
   function moveDirection(keyCode) {
     collect();
     if (!items.length) return;
@@ -245,7 +261,20 @@ export function createFocusManager(root, handlers) {
       }
     });
 
-    if (best) focusItem(best);
+    if (best) {
+      focusItem(best);
+      return;
+    }
+
+    // Spatial search found nothing (overlapping/stacked tiles, or an edge).
+    // For dock/input rows, fall back to index-order movement so left/right
+    // always advances through the row.
+    if (isHorizontal) {
+      const row = focusRow(active);
+      if (row === 'apps' || row === 'inputs' || row === 'other') {
+        moveByIndexInRow(active, keyCode === REMOTE_KEY.RIGHT ? 1 : -1);
+      }
+    }
   }
 
   function onKeyDown(event) {
