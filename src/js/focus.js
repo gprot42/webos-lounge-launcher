@@ -29,9 +29,6 @@ export function createFocusManager(root, handlers) {
   let lastRealPointerY = null;
   let lastKeyNavAt = 0;
   const KEY_NAV_POINTER_GUARD_MS = 700;
-  // True only while our own focusItem() is calling .focus(). Lets the focusin
-  // diagnostic distinguish manager-driven focus from an external focus-stealer.
-  let focusingViaManager = false;
 
   function collect() {
     items = Array.from(root.querySelectorAll('.focusable:not([disabled])'));
@@ -72,9 +69,7 @@ export function createFocusManager(root, handlers) {
 
   function focusItem(el) {
     if (!el) return false;
-    focusingViaManager = true;
     el.focus();
-    focusingViaManager = false;
     // webOS/Chromium silently ignores .focus() on elements that are not
     // actually focusable at that moment (visibility:hidden, detached, an
     // ancestor with visibility:hidden, tabindex removed, etc). When that
@@ -164,10 +159,6 @@ export function createFocusManager(root, handlers) {
     // suppress it briefly and only when the cursor has not actually moved.
     if (Date.now() - lastKeyNavAt < KEY_NAV_POINTER_GUARD_MS
       && event.clientX === lastRealPointerX && event.clientY === lastRealPointerY) {
-      if (typeof window !== 'undefined') {
-        window.__NAV = window.__NAV || {};
-        window.__NAV.pg = (window.__NAV.pg || 0) + 1;
-      }
       return;
     }
     lastRealPointerX = event.clientX;
@@ -283,23 +274,16 @@ export function createFocusManager(root, handlers) {
 
   function moveDirection(keyCode) {
     collect();
-    const nav = (typeof window !== 'undefined') ? (window.__NAV = window.__NAV || {}) : {};
-    const dirName = keyCode === REMOTE_KEY.LEFT ? 'L'
-      : keyCode === REMOTE_KEY.RIGHT ? 'R'
-      : keyCode === REMOTE_KEY.UP ? 'U'
-      : keyCode === REMOTE_KEY.DOWN ? 'D' : '?';
-    if (!items.length) { nav.last = dirName + ' noItems'; return; }
+    if (!items.length) return;
 
     resetPointerAxis();
 
     const active = document.activeElement;
     const fromIdx = items.indexOf(active);
     if (!active || fromIdx < 0) {
-      nav.last = dirName + ' reset from=' + fromIdx + ' n=' + items.length;
       focusItem(items[0]);
       return;
     }
-    nav.last = dirName + ' from=' + fromIdx + '/' + items.length + ' row=' + focusRow(active);
 
     const isHorizontal = keyCode === REMOTE_KEY.LEFT || keyCode === REMOTE_KEY.RIGHT;
     const isVertical = keyCode === REMOTE_KEY.UP || keyCode === REMOTE_KEY.DOWN;
@@ -353,58 +337,19 @@ export function createFocusManager(root, handlers) {
       }
     });
 
-    if (best) {
-      const bestIdx = items.indexOf(best);
-      nav.last += ' spatial->' + bestIdx;
-      const ok = focusItem(best);
-      // Ground-truth diagnostics: what is actually focused right after .focus().
-      const immActive = document.activeElement;
-      nav.last += ' ok=' + (ok ? 1 : 0)
-        + ' imm=' + items.indexOf(immActive)
-        + (immActive === document.body ? '(body)' : '')
-        + (immActive === best ? '(=best)' : '');
-      // Re-collect to detect a re-sort/re-render that moves the focused node.
-      collect();
-      nav.last += ' re=' + items.indexOf(document.activeElement) + '/' + items.length;
-      // Async check: catches a revert that happens after this handler returns
-      // (timer/rAF/DOM replacement) without firing focusin.
-      if (typeof window !== 'undefined') {
-        setTimeout(function () {
-          collect();
-          window.__NAV = window.__NAV || {};
-          const a = document.activeElement;
-          window.__NAV.async = items.indexOf(a)
-            + (a === document.body ? '(body)' : '')
-            + '/' + items.length;
-        }, 120);
-      }
-      if (ok) return;
-      // Spatial target refused focus (should be rare now isFocusable filters
-      // the loop, but guards against ancestors going inert mid-frame). Fall
-      // through to the index walk which retries subsequent candidates.
-      nav.last += ' spatialFAIL';
-    }
+    if (best && focusItem(best)) return;
 
     // Spatial search found nothing (overlapping/stacked tiles, or an edge of a
-    // row). Fall back to index-order movement: same row first, then across all
-    // rows, so left/right always advances through the launcher instead of
-    // dead-ending at a row boundary.
+    // row) or the target refused focus. Fall back to index-order movement: same
+    // row first, then across all rows, so left/right always advances through the
+    // launcher instead of dead-ending at a row boundary.
     if (isHorizontal) {
       const row = focusRow(active);
       if (row !== 'settings') {
         const delta = keyCode === REMOTE_KEY.RIGHT ? 1 : -1;
-        if (moveByIndexInRow(active, delta)) {
-          nav.last += ' rowIdx->' + items.indexOf(document.activeElement);
-        } else if (moveByGlobalIndex(active, delta)) {
-          nav.last += ' global->' + items.indexOf(document.activeElement);
-        } else {
-          nav.last += ' edge(noMove)';
-        }
-      } else {
-        nav.last += ' settingsRow(noMove)';
+        if (moveByIndexInRow(active, delta)) return;
+        moveByGlobalIndex(active, delta);
       }
-    } else {
-      nav.last += ' vertNoBest';
     }
   }
 
@@ -415,12 +360,6 @@ export function createFocusManager(root, handlers) {
     // key that can move/scroll focus must suppress the scroll-induced pointer
     // event that would otherwise snap focus back.
     lastKeyNavAt = Date.now();
-
-    if (typeof window !== 'undefined') {
-      window.__NAV = window.__NAV || {};
-      window.__NAV.kd = (window.__NAV.kd || 0) + 1;
-      window.__NAV.rawCode = event.keyCode + '/' + (event.key || '-');
-    }
 
     // Physical USB/Bluetooth keyboards can report different keyCodes than the
     // TV remote; normalize via event.key so keyboard navigation works too.
@@ -495,14 +434,7 @@ export function createFocusManager(root, handlers) {
     if (code === REMOTE_KEY.LEFT || code === REMOTE_KEY.RIGHT
       || code === REMOTE_KEY.UP || code === REMOTE_KEY.DOWN) {
       event.preventDefault();
-      try {
-        moveDirection(code);
-      } catch (err) {
-        if (typeof window !== 'undefined') {
-          window.__NAV = window.__NAV || {};
-          window.__NAV.last = 'ERR ' + (err && err.message ? err.message : err);
-        }
-      }
+      moveDirection(code);
       return;
     }
     if (code === REMOTE_KEY.ENTER) {
@@ -516,49 +448,6 @@ export function createFocusManager(root, handlers) {
 
   document.addEventListener('keydown', onKeyDown);
   root.addEventListener('mousemove', onPointerMove);
-
-  // Focus-stealer diagnostic. Any focus change NOT initiated by our focusItem()
-  // is recorded with a stack snippet so the HUD can reveal what pulls focus
-  // back after a failed app launch (the left/right freeze). Also count blur
-  // events that drop focus to <body> / null.
-  document.addEventListener('focusin', function (e) {
-    if (typeof window === 'undefined') return;
-    window.__NAV = window.__NAV || {};
-    if (focusingViaManager) return;
-    window.__NAV.steal = (window.__NAV.steal || 0) + 1;
-    collect();
-    window.__NAV.stealPos = items.indexOf(e.target);
-    const stack = (new Error()).stack || '';
-    // First frame after this handler is the real caller.
-    const frames = stack.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-    window.__NAV.stealFrom = frames.slice(1, 4).join(' <- ');
-  }, true);
-
-  // 100ms sampler: records the active-index history and how often the focused
-  // DOM node is replaced. Reveals whether focus reverts (e.g. 10>9>10) and
-  // whether a grid re-render swaps the focused node (nodeChg climbs, disc 'X').
-  if (typeof window !== 'undefined') {
-    window.__NAV = window.__NAV || {};
-    window.__NAV.hist = '';
-    let lastSampled = -2;
-    let lastNode = null;
-    setInterval(function () {
-      collect();
-      const a = document.activeElement;
-      const idx = items.indexOf(a);
-      const disc = (a && a !== document.body && !document.contains(a)) ? 'X' : '';
-      if (idx !== lastSampled) {
-        const parts = (window.__NAV.hist ? window.__NAV.hist.split(' ') : []);
-        parts.push(idx + disc);
-        window.__NAV.hist = parts.slice(-10).join(' ');
-        lastSampled = idx;
-      }
-      if (a !== lastNode) {
-        window.__NAV.nodeChg = (window.__NAV.nodeChg || 0) + 1;
-        lastNode = a;
-      }
-    }, 100);
-  }
 
   return {
     refresh: function () {
