@@ -255,15 +255,38 @@ function pickForegroundId(res) {
   return '';
 }
 
+function getForegroundViaRoot() {
+  // Same privilege wall as listApps: a sandboxed web app is not allowed to
+  // query applicationManager for the foreground app, so the direct/subscription
+  // call is denied and never resolves. Running luna-send as root returns it.
+  // `-n 1` with subscribe:true prints the first payload and exits.
+  const command =
+    "luna-send -n 1 -f 'luna://com.webos.applicationManager/getForegroundAppInfo' '{\"subscribe\":true}'";
+  return withTimeout(execRoot(command), 5000).then(function (res) {
+    let out = res && res.stdoutString ? String(res.stdoutString) : '';
+    if (!out && res && res.stdoutBytes) {
+      try { out = String(atob(res.stdoutBytes)); } catch (err) { /* ignore */ }
+    }
+    out = out.trim();
+    if (!out) throw new Error('empty getForegroundAppInfo output');
+    const data = JSON.parse(out);
+    if (data && data.returnValue === false) {
+      throw new Error(data.errorText || 'getForegroundAppInfo failed');
+    }
+    return {appId: pickForegroundId(data)};
+  });
+}
+
 export function getForegroundApp() {
-  // On retail webOS `getForegroundAppInfo` only answers a *subscription*, not a
-  // one-shot request -- a plain request just hangs. Subscribe, take the first
-  // payload, then cancel so this behaves like a one-shot.
-  return withTimeout(lunaSubscribeOnce('luna://com.webos.applicationManager', {
-    method: 'getForegroundAppInfo',
-    parameters: {}
-  }), 4000).then(function (res) {
-    return {appId: pickForegroundId(res)};
+  // Prefer the root path (the only one that works on retail webOS for a
+  // sandboxed app); fall back to in-app subscription / one-shot for previews.
+  return getForegroundViaRoot().catch(function () {
+    return withTimeout(lunaSubscribeOnce('luna://com.webos.applicationManager', {
+      method: 'getForegroundAppInfo',
+      parameters: {}
+    }), 4000).then(function (res) {
+      return {appId: pickForegroundId(res)};
+    });
   }).catch(function () {
     return withTimeout(lunaRequest('luna://com.webos.applicationManager', {
       method: 'getForegroundApp',
