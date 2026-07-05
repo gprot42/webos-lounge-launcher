@@ -22,6 +22,13 @@ export function createFocusManager(root, handlers) {
   let pointerAccumDy = 0;
   let lastPointerX = null;
   let lastPointerY = null;
+  // Last *physical* cursor position, never cleared by key navigation. Used to
+  // reject phantom pointermove events that webOS fires when the app row scrolls
+  // under a stationary Magic-Remote cursor after a remote key press.
+  let lastRealPointerX = null;
+  let lastRealPointerY = null;
+  let lastKeyNavAt = 0;
+  const KEY_NAV_POINTER_GUARD_MS = 700;
 
   function collect() {
     items = Array.from(root.querySelectorAll('.focusable:not([disabled])'));
@@ -114,6 +121,23 @@ export function createFocusManager(root, handlers) {
 
   function onPointerMove(event) {
     if (event.clientX == null || event.clientY == null) return;
+
+    // Reject phantom pointermove events. After a remote key press moves focus,
+    // the app row scrolls under a stationary cursor; webOS then emits a
+    // pointermove with the SAME screen coordinates as the last physical cursor
+    // position. Left unchecked it re-focuses whatever tile is now under the
+    // cursor, snapping focus back and freezing left/right navigation. Only
+    // suppress it briefly and only when the cursor has not actually moved.
+    if (Date.now() - lastKeyNavAt < KEY_NAV_POINTER_GUARD_MS
+      && event.clientX === lastRealPointerX && event.clientY === lastRealPointerY) {
+      if (typeof window !== 'undefined') {
+        window.__NAV = window.__NAV || {};
+        window.__NAV.pg = (window.__NAV.pg || 0) + 1;
+      }
+      return;
+    }
+    lastRealPointerX = event.clientX;
+    lastRealPointerY = event.clientY;
 
     if (lastPointerX != null) {
       updatePointerAxis(event.clientX - lastPointerX, event.clientY - lastPointerY);
@@ -320,6 +344,10 @@ export function createFocusManager(root, handlers) {
   function onKeyDown(event) {
     let code = event.keyCode;
     resetPointerAxis();
+    // Open the phantom-pointermove guard window (see onPointerMove). Any remote
+    // key that can move/scroll focus must suppress the scroll-induced pointer
+    // event that would otherwise snap focus back.
+    lastKeyNavAt = Date.now();
 
     if (typeof window !== 'undefined') {
       window.__NAV = window.__NAV || {};
