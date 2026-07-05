@@ -23,9 +23,7 @@ export function createInputRow(container, getConfig, options) {
     if (allowed.indexOf(device.id) >= 0) return true;
 
     if (device.id.indexOf('HDMI') === 0) {
-      return allowed.some(function (id) {
-        return id.indexOf('HDMI') === 0;
-      });
+      return false;
     }
 
     return allowed.some(function (id) {
