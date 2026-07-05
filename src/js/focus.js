@@ -68,8 +68,15 @@ export function createFocusManager(root, handlers) {
   }
 
   function focusItem(el) {
-    if (!el) return;
+    if (!el) return false;
     el.focus();
+    // webOS/Chromium silently ignores .focus() on elements that are not
+    // actually focusable at that moment (visibility:hidden, detached, an
+    // ancestor with visibility:hidden, tabindex removed, etc). When that
+    // happens document.activeElement does NOT change, so spatial nav keeps
+    // re-selecting the same unfocusable neighbour and left/right freezes.
+    // Report success so callers can skip it and advance to the next candidate.
+    const landed = document.activeElement === el;
     ensureHorizontallyVisible(el);
     if (el.scrollIntoView) {
       try {
@@ -78,10 +85,32 @@ export function createFocusManager(root, handlers) {
         el.scrollIntoView(false);
       }
     }
-    el.classList.add('focused');
-    items.forEach(function (item) {
-      if (item !== el) item.classList.remove('focused');
-    });
+    if (landed) {
+      el.classList.add('focused');
+      items.forEach(function (item) {
+        if (item !== el) item.classList.remove('focused');
+      });
+    }
+    return landed;
+  }
+
+  // True when an element can actually take keyboard focus right now. Filters
+  // out zero-size / hidden tiles that still report a layout rect (which fools
+  // spatial navigation into repeatedly targeting them).
+  function isFocusable(el) {
+    if (!el) return false;
+    if (el.disabled) return false;
+    if (el.tabIndex < 0) return false;
+    if (typeof el.offsetParent !== 'undefined' && el.offsetParent === null) {
+      // display:none (offsetParent null) — but position:fixed also reports
+      // null, so double-check via getClientRects for those.
+      if (!el.getClientRects || el.getClientRects().length === 0) return false;
+    }
+    const style = window.getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return false;
+    return true;
   }
 
   function resetPointerAxis() {
@@ -218,10 +247,14 @@ export function createFocusManager(root, handlers) {
     });
     const idx = scoped.indexOf(active);
     if (idx < 0) return false;
-    const next = scoped[idx + delta];
-    if (!next) return false; // at the row edge; let the caller cross rows
-    focusItem(next);
-    return true;
+    // Walk outward skipping any neighbour that refuses focus, so a single
+    // hidden/unfocusable tile can't wedge left/right navigation.
+    for (let i = idx + delta; i >= 0 && i < scoped.length; i += delta) {
+      const next = scoped[i];
+      if (!isFocusable(next)) continue;
+      if (focusItem(next)) return true;
+    }
+    return false; // at the row edge (or no focusable neighbour); cross rows
   }
 
   // Final horizontal fallback: walk every focusable (except the settings
@@ -235,10 +268,12 @@ export function createFocusManager(root, handlers) {
     });
     const idx = scoped.indexOf(active);
     if (idx < 0) return false;
-    const next = scoped[idx + delta];
-    if (!next) return false; // true first/last item
-    focusItem(next);
-    return true;
+    for (let i = idx + delta; i >= 0 && i < scoped.length; i += delta) {
+      const next = scoped[i];
+      if (!isFocusable(next)) continue;
+      if (focusItem(next)) return true;
+    }
+    return false; // true first/last focusable item
   }
 
   function moveDirection(keyCode) {
@@ -281,6 +316,7 @@ export function createFocusManager(root, handlers) {
 
     items.forEach(function (item) {
       if (item === active) return;
+      if (!isFocusable(item)) return; // skip hidden/zero-size tiles that still report a rect
       const r = item.getBoundingClientRect();
       const ix = r.left + r.width / 2;
       const iy = r.top + r.height / 2;
@@ -314,8 +350,11 @@ export function createFocusManager(root, handlers) {
 
     if (best) {
       nav.last += ' spatial->' + items.indexOf(best);
-      focusItem(best);
-      return;
+      if (focusItem(best)) return;
+      // Spatial target refused focus (should be rare now isFocusable filters
+      // the loop, but guards against ancestors going inert mid-frame). Fall
+      // through to the index walk which retries subsequent candidates.
+      nav.last += ' spatialFAIL';
     }
 
     // Spatial search found nothing (overlapping/stacked tiles, or an edge of a
