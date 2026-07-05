@@ -247,7 +247,7 @@ export function listApps() {
 }
 
 export function getForegroundApp() {
-  return lunaRequest('luna://com.webos.applicationManager', {
+  return withTimeout(lunaRequest('luna://com.webos.applicationManager', {
     method: 'getForegroundApp',
     parameters: {}
   }).catch(function () {
@@ -255,7 +255,7 @@ export function getForegroundApp() {
       method: 'getForegroundAppInfo',
       parameters: {}
     });
-  });
+  }), 4000);
 }
 
 export function getAllInputStatus() {

@@ -281,21 +281,34 @@ async function refreshAll() {
   focus.refresh();
 }
 
-function handleVisibilityChange() {
-  const isVisible = !document.hidden;
-  visible = isVisible;
+// Reclaim system keyboard/pointer focus and re-select an item. After returning
+// from another app the webview can come back without an active focus target,
+// which makes the whole UI feel frozen (remote/pointer do nothing).
+function reclaimInput() {
+  try { window.focus(); } catch (err) { /* ignore */ }
+  try { document.body && document.body.focus && document.body.focus(); } catch (err) { /* ignore */ }
+  focus.refresh();
+}
 
-  if (isVisible) {
-    const config = getConfig();
-    if (config.music && config.music.resumeOnReturn) {
-      music.fadeInAndResume();
-    }
-    refreshAll().catch(function (err) {
-      // Never leave the launcher unselectable after returning from another app.
-      console.error(err);
-      focus.refresh();
-    });
+function handleResume() {
+  visible = true;
+  const config = getConfig();
+  if (config.music && config.music.resumeOnReturn) {
+    music.fadeInAndResume();
   }
+  refreshAll().then(reclaimInput, function (err) {
+    // Never leave the launcher unselectable after returning from another app.
+    console.error(err);
+    reclaimInput();
+  });
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    visible = false;
+    return;
+  }
+  handleResume();
 }
 
 async function maybeReturnToLounge(appId) {
@@ -379,6 +392,11 @@ async function init() {
   await refreshAll();
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
+  // webOS fires `webOSRelaunch` on the document when the user returns to an
+  // already-running app (e.g. after another app closes or fails to launch).
+  // Treat it as a resume so a suspended launcher wakes up and regains input.
+  document.addEventListener('webOSRelaunch', handleResume);
+  window.addEventListener('focus', reclaimInput);
   window.addEventListener('pagehide', handlePowerOff);
   startForegroundWatcher();
 }
