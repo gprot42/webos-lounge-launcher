@@ -4,7 +4,7 @@ import {normalizeMusicConfig} from './builtin-music.js';
 const STORAGE_KEY = 'lounge.config.v1';
 
 export const DEFAULT_CONFIG = {
-  version: 9,
+  version: 12,
   profile: 'default',
   profiles: {},
   background: {
@@ -37,11 +37,14 @@ export const DEFAULT_CONFIG = {
       'netflix', 'amazon.html', 'youtube.leanback.v4', 'com.apple.appletv',
       'bbc.iplayer.lge', 'com.webos.app.browser', 'com.webos.app.mediadiscovery'
     ],
+    customApps: [],
     inputs: ['HDMI_1', 'HDMI_2', 'HDMI_3', 'TV'],
     inputLabels: {},
     showClock: true,
+    showDate: true,
     timezone: '',
     iconSize: 'medium',
+    iconAlign: 'center',
     bootOnStart: false,
     returnOnAppExit: false
   }
@@ -163,6 +166,30 @@ function migrateConfig(config) {
       config.launcher.iconSize = 'medium';
     }
     config.version = 9;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 10) {
+    if (config.launcher.showDate === undefined) {
+      config.launcher.showDate = true;
+    }
+    config.version = 10;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 11) {
+    if (!config.launcher.iconAlign) {
+      config.launcher.iconAlign = 'center';
+    }
+    config.version = 11;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 12) {
+    if (!Array.isArray(config.launcher.customApps)) {
+      config.launcher.customApps = [];
+    }
+    config.version = 12;
     saveConfig(config);
   }
 

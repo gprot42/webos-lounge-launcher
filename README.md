@@ -4,12 +4,17 @@ A fullscreen home screen for rooted LG webOS TVs. Pick an app, switch inputs, an
 
 ![Lounge Launcher on an LG TV](docs/screenshots/screengrab1.jpg)
 
+![Lounge Launcher settings](docs/screenshots/screengrab2.jpg)
+
 ## Features
 
-- App grid with pinned streaming apps
+- App grid with pinned streaming apps, plus custom app tiles (pin any installed app by App ID with a bundled icon)
 - HDMI and TV input shortcuts with custom labels
-- Scenic backgrounds and built-in ambient music
-- Clock, volume controls, and settings panel
+- Scenic backgrounds and built-in ambient music that keeps playing while settings are open
+- Clock with optional date, both independently toggleable
+- Volume bar that mirrors the TV's remote volume changes
+- Adjustable icon size and left/center/right icon alignment
+- Dedicated app settings button and a TV Settings tile for quick access to system settings
 - Remote-friendly navigation
 
 ## Compatibility

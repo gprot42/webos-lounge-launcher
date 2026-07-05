@@ -1,5 +1,6 @@
 import {normalizeMusicConfig, resolveBuiltinPlaylist} from './builtin-music.js';
 import {discoverMusicTracks, isAudioFile} from './usb.js';
+import {subscribeVolume} from './luna.js';
 
 function shuffleArray(items) {
   const arr = items.slice();
@@ -278,6 +279,30 @@ export function createMusicPlayer(getConfig, elements) {
 
     return next;
   }
+
+  function reflectSystemVolume(volume, systemMuted) {
+    const min = Number(volumeSlider.min) || 0;
+    const max = Number(volumeSlider.max) || 100;
+    const clamped = Math.max(min, Math.min(max, Math.round(volume)));
+
+    volumeSlider.value = String(clamped);
+    setVolume(clamped / 100, true);
+    updateSliderFill();
+
+    muted = !!systemMuted || clamped <= min;
+    muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    muteBtn.textContent = muted ? '🔇' : '🔉';
+
+    volumeSlider.classList.add('pulse');
+    controlsWrap.classList.add('pulsing');
+    clearTimeout(reflectSystemVolume.pulseTimer);
+    reflectSystemVolume.pulseTimer = setTimeout(function () {
+      volumeSlider.classList.remove('pulse');
+      controlsWrap.classList.remove('pulsing');
+    }, 500);
+  }
+
+  subscribeVolume(reflectSystemVolume);
 
   return {
     loadTracks: loadTracks,

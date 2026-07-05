@@ -174,3 +174,54 @@ export function getStorageDevices() {
     });
   });
 }
+
+/**
+ * Subscribe to TV system volume changes. On webOS the physical remote volume
+ * keys are handled by the platform, so we listen for volume updates and mirror
+ * them on the on-screen bar. Returns an unsubscribe function.
+ */
+export function subscribeVolume(onChange) {
+  if (!hasWebOS() || typeof onChange !== 'function') {
+    return function () {};
+  }
+
+  function extractVolume(res) {
+    if (!res) return null;
+    if (res.volume && typeof res.volume.volume === 'number') return res.volume.volume;
+    if (res.volumeStatus && typeof res.volumeStatus.volume === 'number') return res.volumeStatus.volume;
+    if (typeof res.volume === 'number') return res.volume;
+    return null;
+  }
+
+  function extractMuted(res) {
+    if (!res) return false;
+    if (res.volume && typeof res.volume.muted === 'boolean') return res.volume.muted;
+    if (res.volumeStatus && typeof res.volumeStatus.muteStatus === 'boolean') return res.volumeStatus.muteStatus;
+    if (typeof res.muted === 'boolean') return res.muted;
+    return false;
+  }
+
+  function requestOn(uri) {
+    try {
+      return window.webOS.service.request(uri, {
+        method: 'getVolume',
+        parameters: {subscribe: true},
+        onSuccess: function (res) {
+          const volume = extractVolume(res);
+          if (volume !== null) onChange(volume, extractMuted(res));
+        },
+        onFailure: function () {}
+      });
+    } catch (err) {
+      return null;
+    }
+  }
+
+  const handle = requestOn('luna://com.webos.audio') || requestOn('luna://com.webos.service.audio');
+
+  return function () {
+    if (handle && typeof handle.cancel === 'function') {
+      handle.cancel();
+    }
+  };
+}

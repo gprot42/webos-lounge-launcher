@@ -82,8 +82,69 @@ body {
   position: relative;
   z-index: 2;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 28px;
   padding: 48px 64px 0;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-icon {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.06)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 8px rgba(0, 0, 0, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.settings-icon-glyph {
+  width: 34px;
+  height: 34px;
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+.settings-icon-img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.settings-icon.focused {
+  outline: none;
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.85),
+    0 0 0 5px rgba(255, 200, 150, 0.5),
+    0 12px 34px rgba(0, 0, 0, 0.45),
+    0 0 30px rgba(255, 190, 130, 0.3);
+}
+
+.clock-stack {
+  text-align: right;
 }
 
 .clock {
@@ -92,6 +153,23 @@ body {
   letter-spacing: 0.04em;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
   opacity: 0.85;
+}
+
+.clock:empty {
+  display: none;
+}
+
+.clock-date {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+  opacity: 0.7;
+}
+
+.clock-date:empty {
+  display: none;
 }
 
 .launcher {
@@ -106,6 +184,21 @@ body {
 
 .launcher > * + * {
   margin-top: 52px;
+}
+
+.launcher.icons-left .input-row,
+.launcher.icons-left .app-grid {
+  justify-content: flex-start;
+}
+
+.launcher.icons-center .input-row,
+.launcher.icons-center .app-grid {
+  justify-content: center;
+}
+
+.launcher.icons-right .input-row,
+.launcher.icons-right .app-grid {
+  justify-content: flex-end;
 }
 
 .input-row {

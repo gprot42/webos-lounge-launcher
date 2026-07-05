@@ -10,7 +10,7 @@ import {createFocusManager} from './focus.js';
 import {createSettingsPanel} from './settings.js';
 import {getForegroundApp, launchApp, listApps} from './luna.js';
 import {isHomeApp} from './remote.js';
-import {isTerminalAppId} from './app-icons.js';
+import {isTerminalAppId, getAppIdCandidates} from './app-icons.js';
 
 const APP_ID = 'org.webosbrew.lounge.launcher';
 
@@ -24,7 +24,10 @@ const elements = {
   backgroundLayer: document.getElementById('background-layer'),
   scrim: document.getElementById('scrim'),
   clock: document.getElementById('clock'),
+  clockDate: document.getElementById('clock-date'),
+  appSettingsBtn: document.getElementById('app-settings-btn'),
   inputRow: document.getElementById('input-row'),
+  launcher: document.querySelector('.launcher'),
   appGrid: document.getElementById('app-grid'),
   musicBar: document.getElementById('music-bar'),
   trackTitle: document.getElementById('track-title'),
@@ -62,6 +65,9 @@ const background = createBackgroundController(elements, getConfig);
 const music = createMusicPlayer(getConfig, Object.assign({}, elements, {onToast: showToast}));
 const inputs = createInputRow(elements.inputRow, getConfig, {onToast: showToast});
 const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
+  onOpen: function () {
+    music.fadeInAndResume();
+  },
   onSave: function (savedConfig) {
     setConfig(savedConfig);
     refreshAll();
@@ -80,6 +86,9 @@ const apps = createAppGrid(elements.appGrid, getConfig, {
   },
   onOpenSettings: function () {
     settings.show();
+  },
+  onOpenTvSettings: function () {
+    openTvSettings();
   },
   onToast: showToast
 });
@@ -112,6 +121,29 @@ const focus = createFocusManager(document.getElementById('app'), {
   }
 });
 
+async function openTvSettings() {
+  const config = getConfig();
+  if (config.music && config.music.pauseOnLaunch) {
+    music.fadeOutAndPause();
+  }
+  const ids = getAppIdCandidates('com.webos.app.settings');
+  for (let i = 0; i < ids.length; i += 1) {
+    try {
+      await launchApp(ids[i]);
+      return;
+    } catch (err) {
+      // Try the next candidate id.
+    }
+  }
+  showToast('Could not open TV Settings');
+}
+
+if (elements.appSettingsBtn) {
+  elements.appSettingsBtn.addEventListener('click', function () {
+    settings.show();
+  });
+}
+
 function formatClockTime(date, timezone) {
   if (timezone && typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
     try {
@@ -138,14 +170,42 @@ function formatClockTime(date, timezone) {
   return hours + ':' + minutes;
 }
 
+function formatClockDate(date, timezone) {
+  const options = {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  };
+  if (timezone) {
+    options.timeZone = timezone;
+  }
+  try {
+    return new Intl.DateTimeFormat('en-GB', options).format(date);
+  } catch (err) {
+    // Invalid timezone — fall back to local date.
+    delete options.timeZone;
+    return new Intl.DateTimeFormat('en-GB', options).format(date);
+  }
+}
+
 function updateClock() {
   const config = getConfig();
-  if (!config.launcher || !config.launcher.showClock) {
+  const launcher = config.launcher || {};
+  const now = new Date();
+
+  if (launcher.showClock) {
+    elements.clock.textContent = formatClockTime(now, launcher.timezone || '');
+  } else {
     elements.clock.textContent = '';
-    return;
   }
 
-  elements.clock.textContent = formatClockTime(new Date(), config.launcher.timezone || '');
+  if (elements.clockDate) {
+    if (launcher.showDate) {
+      elements.clockDate.textContent = formatClockDate(now, launcher.timezone || '');
+    } else {
+      elements.clockDate.textContent = '';
+    }
+  }
 }
 
 async function applyUsbOverrides() {
@@ -166,8 +226,18 @@ async function applyUsbOverrides() {
   }
 }
 
+function applyIconAlign() {
+  if (!elements.launcher) return;
+  const config = getConfig();
+  const align = (config.launcher && config.launcher.iconAlign) || 'center';
+  elements.launcher.classList.remove('icons-left', 'icons-center', 'icons-right');
+  const cls = align === 'left' ? 'icons-left' : align === 'right' ? 'icons-right' : 'icons-center';
+  elements.launcher.classList.add(cls);
+}
+
 async function refreshAll() {
   updateClock();
+  applyIconAlign();
   music.applyConfig();
   await background.refresh();
   await inputs.refresh();

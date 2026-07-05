@@ -126,5 +126,26 @@ export const KNOWN_BUILTIN_APPS = [
   'com.channel5.my5',
   'com.disney.disneyplus',
   'com.webos.app.browser',
-  'com.webos.app.mediadiscovery'
+  'com.webos.app.mediadiscovery',
+  'com.webos.app.settings'
+];
+
+/** Bundled icon assets a user can pick from when adding a custom app tile. */
+export const BUILTIN_ICON_CHOICES = [
+  {value: 'assets/app-icons/netflix.png', label: 'Netflix'},
+  {value: 'assets/app-icons/prime-video.png', label: 'Prime Video'},
+  {value: 'assets/app-icons/youtube.png', label: 'YouTube'},
+  {value: 'assets/app-icons/apple-tv.png', label: 'Apple TV'},
+  {value: 'assets/app-icons/disney-plus.png', label: 'Disney+'},
+  {value: 'assets/app-icons/bbc-iplayer.png', label: 'BBC iPlayer'},
+  {value: 'assets/app-icons/itvx.png', label: 'ITVX'},
+  {value: 'assets/app-icons/channel4.png', label: 'Channel 4'},
+  {value: 'assets/app-icons/channel5.png', label: 'Channel 5'},
+  {value: 'assets/app-icons/rakuten.png', label: 'Rakuten TV'},
+  {value: 'assets/app-icons/lg-channels.png', label: 'LG Channels'},
+  {value: 'assets/app-icons/browser.png', label: 'Web Browser'},
+  {value: 'assets/app-icons/media-player.png', label: 'Media Player'},
+  {value: 'assets/app-icons/tv-settings.png', label: 'TV Settings'},
+  {value: 'assets/app-icons/homebrew.png', label: 'Homebrew'},
+  {value: 'assets/app-icons/terminal.png', label: 'Terminal'}
 ];

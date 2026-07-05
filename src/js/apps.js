@@ -58,21 +58,29 @@ export function createAppGrid(container, getConfig, options) {
     button.type = 'button';
     button.className = 'app-tile settings-tile focusable';
     button.dataset.focusIndex = String(index);
-    button.dataset.action = 'settings';
-    button.setAttribute('aria-label', 'Settings');
+    button.dataset.action = 'tv-settings';
+    button.setAttribute('aria-label', 'TV Settings');
 
-    const icon = document.createElement('span');
-    icon.className = 'app-fallback';
-    icon.textContent = '⚙';
-    button.appendChild(icon);
+    const img = document.createElement('img');
+    img.className = 'app-icon';
+    img.src = 'assets/app-icons/tv-settings.png';
+    img.alt = '';
+    img.addEventListener('error', function () {
+      img.remove();
+      const fallback = document.createElement('span');
+      fallback.className = 'app-fallback';
+      fallback.textContent = '\u2699';
+      button.insertBefore(fallback, label);
+    });
+    button.appendChild(img);
 
     const label = document.createElement('span');
     label.className = 'app-label';
-    label.textContent = 'Settings';
+    label.textContent = 'TV Settings';
     button.appendChild(label);
 
     button.addEventListener('click', function () {
-      if (options.onOpenSettings) options.onOpenSettings();
+      if (options.onOpenTvSettings) options.onOpenTvSettings();
     });
 
     return button;
@@ -104,6 +112,11 @@ export function createAppGrid(container, getConfig, options) {
     container.innerHTML = '';
     const config = getConfig();
     const pinned = (config.launcher && config.launcher.pinnedApps) || [];
+    const customApps = (config.launcher && config.launcher.customApps) || [];
+    const customById = {};
+    customApps.forEach(function (entry) {
+      if (entry && entry.id) customById[entry.id] = entry;
+    });
     const scaleBySize = {small: 0.78, medium: 1, large: 1.28};
     const iconSize = (config.launcher && config.launcher.iconSize) || 'medium';
     container.style.setProperty('--tile-scale', String(scaleBySize[iconSize] || 1));
@@ -112,6 +125,16 @@ export function createAppGrid(container, getConfig, options) {
     catalog = await loadAppCatalog();
 
     for (let i = 0; i < pinned.length; i += 1) {
+      const custom = customById[pinned[i]];
+      if (custom) {
+        tiles.push(makeTile({
+          id: custom.launchId || custom.id,
+          launchId: custom.launchId || custom.id,
+          title: custom.title || custom.launchId || custom.id,
+          icon: custom.icon || ''
+        }, i));
+        continue;
+      }
       const info = await resolvePinnedApp(pinned[i], catalog);
       tiles.push(makeTile(info, i));
     }

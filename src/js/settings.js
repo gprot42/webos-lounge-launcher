@@ -1,7 +1,7 @@
 import {saveConfig, TIMEZONE_OPTIONS} from './config.js';
 import {listInstalledApps} from './apps.js';
 import {loadAppCatalog, resolvePinnedApp} from './app-catalog.js';
-import {KNOWN_BUILTIN_APPS, getBuiltinAppIcon, getBuiltinAppTitle} from './app-icons.js';
+import {KNOWN_BUILTIN_APPS, getBuiltinAppIcon, getBuiltinAppTitle, BUILTIN_ICON_CHOICES} from './app-icons.js';
 import {loadBuiltinManifest, normalizeBackgroundConfig, parseUrlList} from './backgrounds.js';
 import {loadBuiltinMusicManifest, normalizeMusicConfig} from './builtin-music.js';
 import {applyActiveProfile, PROFILE_OPTIONS} from './profiles.js';
@@ -99,7 +99,18 @@ function createOptionStepper(className, focusIndex, optionList, currentValue, on
     }
   };
 
-  el.addEventListener('click', function () {
+  prev.addEventListener('click', function (event) {
+    event.stopPropagation();
+    el.__step(-1);
+  });
+
+  next.addEventListener('click', function (event) {
+    event.stopPropagation();
+    el.__step(1);
+  });
+
+  el.addEventListener('click', function (event) {
+    if (event.target === prev || event.target === next) return;
     el.__step(1);
   });
 
@@ -115,6 +126,14 @@ export function createSettingsPanel(panel, getConfig, options) {
   let pinnedOrder = [];
   let pinnedContainer = null;
   let appsByIdMap = {};
+  let customApps = [];
+
+  function findCustomApp(id) {
+    for (let i = 0; i < customApps.length; i += 1) {
+      if (customApps[i].id === id) return customApps[i];
+    }
+    return null;
+  }
 
   function hide() {
     visible = false;
@@ -126,6 +145,7 @@ export function createSettingsPanel(panel, getConfig, options) {
     visible = true;
     panel.hidden = false;
     render();
+    if (options.onOpen) options.onOpen();
   }
 
   function labeledControl(label, control) {
@@ -217,7 +237,11 @@ export function createSettingsPanel(panel, getConfig, options) {
       removeBtn.dataset.focusIndex = String(962 + index * 3);
       removeBtn.textContent = '✕';
       removeBtn.addEventListener('click', function () {
+        const removedId = pinnedOrder[index];
         pinnedOrder.splice(index, 1);
+        for (let i = customApps.length - 1; i >= 0; i -= 1) {
+          if (customApps[i].id === removedId) customApps.splice(i, 1);
+        }
         renderPinnedList(container);
       });
 
@@ -235,6 +259,9 @@ export function createSettingsPanel(panel, getConfig, options) {
     const bg = normalizeBackgroundConfig(effective.background);
     builtinManifest = await loadBuiltinManifest();
     pinnedOrder = (config.launcher.pinnedApps || []).slice();
+    customApps = (config.launcher.customApps || []).map(function (entry) {
+      return Object.assign({}, entry);
+    });
     panel.innerHTML = '';
 
     const header = document.createElement('div');
@@ -538,6 +565,13 @@ export function createSettingsPanel(panel, getConfig, options) {
     showClockToggle.dataset.focusIndex = '919';
     launcherSection.appendChild(labeledControl('Show clock', showClockToggle));
 
+    const showDateToggle = document.createElement('input');
+    showDateToggle.type = 'checkbox';
+    showDateToggle.checked = config.launcher.showDate !== false;
+    showDateToggle.className = 'focusable';
+    showDateToggle.dataset.focusIndex = '9195';
+    launcherSection.appendChild(labeledControl('Show date', showDateToggle));
+
     const timezoneSelect = createOptionStepper('', 920,
       TIMEZONE_OPTIONS.map(function (option) {
         return {value: option.value, label: option.label};
@@ -551,6 +585,13 @@ export function createSettingsPanel(panel, getConfig, options) {
       {value: 'large', label: 'Large'}
     ], config.launcher.iconSize || 'medium');
     launcherSection.appendChild(labeledControl('Icon size', iconSizeSelect));
+
+    const iconAlignSelect = createOptionStepper('', 9206, [
+      {value: 'left', label: 'Left'},
+      {value: 'center', label: 'Centre'},
+      {value: 'right', label: 'Right'}
+    ], config.launcher.iconAlign || 'center');
+    launcherSection.appendChild(labeledControl('Icon alignment', iconAlignSelect));
 
     const returnToggle = document.createElement('input');
     returnToggle.type = 'checkbox';
@@ -604,6 +645,63 @@ export function createSettingsPanel(panel, getConfig, options) {
     appsSection.appendChild(addAppsList);
     body.appendChild(appsSection);
 
+    const customSection = document.createElement('section');
+    customSection.className = 'settings-section';
+    customSection.innerHTML = '<h3>Custom app</h3><p class="settings-hint">Pin any installed app by its App ID and choose a bundled icon. Find the App ID on your TV or in the Homebrew app list.</p>';
+
+    const customAppIdInput = document.createElement('input');
+    customAppIdInput.type = 'text';
+    customAppIdInput.className = 'settings-text focusable';
+    customAppIdInput.dataset.focusIndex = '1100';
+    customAppIdInput.placeholder = 'e.g. com.spotify.tv';
+    customSection.appendChild(labeledControl('App ID', customAppIdInput));
+
+    const customNameInput = document.createElement('input');
+    customNameInput.type = 'text';
+    customNameInput.className = 'settings-text focusable';
+    customNameInput.dataset.focusIndex = '1101';
+    customNameInput.placeholder = 'e.g. Spotify';
+    customSection.appendChild(labeledControl('Name', customNameInput));
+
+    const iconPreview = document.createElement('img');
+    iconPreview.className = 'settings-app-icon';
+    iconPreview.alt = '';
+    iconPreview.src = BUILTIN_ICON_CHOICES[0].value;
+
+    const iconSelect = createOptionStepper('', 1102, BUILTIN_ICON_CHOICES, BUILTIN_ICON_CHOICES[0].value, function (value) {
+      iconPreview.src = value;
+    });
+
+    const iconRow = labeledControl('Icon', iconSelect);
+    iconRow.insertBefore(iconPreview, iconRow.lastChild);
+    customSection.appendChild(iconRow);
+
+    const addCustomBtn = document.createElement('button');
+    addCustomBtn.type = 'button';
+    addCustomBtn.className = 'settings-mini-btn settings-add-custom focusable';
+    addCustomBtn.dataset.focusIndex = '1103';
+    addCustomBtn.textContent = 'Add custom app';
+    addCustomBtn.addEventListener('click', function () {
+      const launchId = customAppIdInput.value.trim();
+      if (!launchId) {
+        if (options.onToast) options.onToast('Enter an App ID first');
+        return;
+      }
+
+      const id = 'custom:' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      const title = customNameInput.value.trim() || getBuiltinAppTitle(launchId) || launchId;
+
+      customApps.push({id: id, launchId: launchId, title: title, icon: iconSelect.value});
+      pinnedOrder.push(id);
+
+      customAppIdInput.value = '';
+      customNameInput.value = '';
+
+      loadAppsLists(pinnedList, addAppsList, config);
+    });
+    customSection.appendChild(addCustomBtn);
+    body.appendChild(customSection);
+
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'settings-save focusable';
@@ -631,11 +729,14 @@ export function createSettingsPanel(panel, getConfig, options) {
       config.music.volume = Number(musicVolume.value) / 100;
 
       config.launcher.showClock = showClockToggle.checked;
+      config.launcher.showDate = showDateToggle.checked;
       config.launcher.timezone = timezoneSelect.value;
       config.launcher.iconSize = iconSizeSelect.value;
+      config.launcher.iconAlign = iconAlignSelect.value;
       config.launcher.returnOnAppExit = returnToggle.checked;
       config.launcher.bootOnStart = bootToggle.checked;
       config.launcher.pinnedApps = pinnedOrder.slice();
+      config.launcher.customApps = customApps.slice();
 
       saveInputSettings(inputsList, config);
 
@@ -714,8 +815,19 @@ export function createSettingsPanel(panel, getConfig, options) {
       appsByIdMap[app.id] = app;
     });
 
+    customApps.forEach(function (entry) {
+      if (!entry || !entry.id) return;
+      appsByIdMap[entry.id] = {
+        id: entry.id,
+        launchId: entry.launchId,
+        title: entry.title || entry.launchId || entry.id,
+        icon: entry.icon || ''
+      };
+    });
+
     for (let i = 0; i < pinnedOrder.length; i += 1) {
       const appId = pinnedOrder[i];
+      if (findCustomApp(appId)) continue;
       if (!appsByIdMap[appId] || !appsByIdMap[appId].title || !appsByIdMap[appId].icon) {
         appsByIdMap[appId] = await resolvePinnedApp(appId, appsByIdMap);
       }
