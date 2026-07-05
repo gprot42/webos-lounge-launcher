@@ -30,9 +30,40 @@ export function createFocusManager(root, handlers) {
     });
   }
 
+  function scrollableAncestor(el) {
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const style = window.getComputedStyle(node);
+      const overflowX = style.overflowX;
+      if ((overflowX === 'auto' || overflowX === 'scroll') &&
+          node.scrollWidth > node.clientWidth + 1) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  // Older webOS Chromium builds ignore scrollIntoView({inline}), so the app
+  // row never scrolls horizontally. Manually keep the focused tile inside the
+  // scroll container's viewport by adjusting scrollLeft.
+  function ensureHorizontallyVisible(el) {
+    const container = scrollableAncestor(el);
+    if (!container) return;
+    const cRect = container.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    const margin = 24;
+    if (eRect.left < cRect.left + margin) {
+      container.scrollLeft -= (cRect.left + margin) - eRect.left;
+    } else if (eRect.right > cRect.right - margin) {
+      container.scrollLeft += eRect.right - (cRect.right - margin);
+    }
+  }
+
   function focusItem(el) {
     if (!el) return;
     el.focus();
+    ensureHorizontallyVisible(el);
     if (el.scrollIntoView) {
       try {
         el.scrollIntoView({block: 'nearest', inline: 'nearest'});
