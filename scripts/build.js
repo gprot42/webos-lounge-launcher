@@ -76,7 +76,14 @@ async function main() {
   await build();
 
   if (process.argv.includes('--pack')) {
-    execSync('ares-package --no-minify .', {cwd: dist, stdio: 'inherit'});
+    // Use the project-local @webos-tools/cli packager. The older global
+    // @webosose/ares-cli writes epoch-zero tar timestamps (1970-01-01) that
+    // make pkgverifier fail on webOS 5.x with "-5: ipk verified failed".
+    const aresPackage = path.join(root, 'node_modules', '.bin', 'ares-package');
+    if (!fs.existsSync(aresPackage)) {
+      throw new Error('Missing @webos-tools/cli — run npm install');
+    }
+    execSync(`"${aresPackage}" --no-minify .`, {cwd: dist, stdio: 'inherit'});
     console.log('Packaged IPK in dist/');
   }
 }

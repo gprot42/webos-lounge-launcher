@@ -71,6 +71,12 @@ const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
   onOpen: function () {
     music.fadeInAndResume();
   },
+  onRendered: function () {
+    // Land focus inside the panel so wheel / arrows navigate options immediately.
+    if (focus && typeof focus.focusWithin === 'function') {
+      focus.focusWithin('#settings-panel');
+    }
+  },
   onSave: function (savedConfig) {
     setConfig(savedConfig);
     refreshAll();
@@ -320,9 +326,17 @@ function handleVisibilityChange() {
   handleResume();
 }
 
+function shouldInterceptHome(launcher) {
+  if (!launcher) return false;
+  // launchOnHome (preferred) or legacy returnOnAppExit: when the stock home
+  // comes to the foreground after another app (Home button or app exit),
+  // relaunch Lounge so it acts as the home screen.
+  return !!(launcher.launchOnHome || launcher.returnOnAppExit);
+}
+
 async function maybeReturnToLounge(appId) {
   const config = getConfig();
-  if (!config.launcher || !config.launcher.returnOnAppExit) return;
+  if (!shouldInterceptHome(config.launcher)) return;
   if (returningToLounge) return;
   if (appId === APP_ID) return;
 
@@ -344,7 +358,8 @@ function startForegroundWatcher() {
   if (!window.webOS || !window.webOS.service) return;
 
   foregroundTimer = setInterval(async function () {
-    if (!visible && !getBaseConfig().launcher.returnOnAppExit) return;
+    // Keep polling while backgrounded only when we may need to intercept Home.
+    if (!visible && !shouldInterceptHome(getBaseConfig().launcher)) return;
 
     try {
       const res = await getForegroundApp();

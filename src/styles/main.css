@@ -513,6 +513,33 @@ body {
   transition: box-shadow 0.15s ease;
 }
 
+/* While settings is open, hide the live launcher layers so the TV compositor
+   is not continuously re-blurring / animating the background under the panel.
+   That is the main cause of slow settings scroll redraw on webOS. */
+body.settings-open #background-layer,
+body.settings-open #scrim,
+body.settings-open .top-bar,
+body.settings-open .launcher,
+body.settings-open .music-bar {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  animation: none !important;
+}
+
+body.settings-open #background-layer,
+body.settings-open #background-layer.has-image.ken-burns,
+body.settings-open #background-layer.gradient-animated {
+  animation: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* Snappy focus moves while scrolling the long settings list. */
+body.settings-open .settings-panel .focused,
+body.settings-open .settings-panel .focusable {
+  transition: none !important;
+}
+
 .settings-panel {
   position: absolute;
   top: 48px;
@@ -524,19 +551,31 @@ body {
   flex-direction: column;
   overflow: hidden;
   border-radius: 24px;
-  background: rgba(12, 12, 18, 0.96);
+  /* Fully opaque — translucent panels force continuous re-composite of the
+     launcher underneath while scrolling. */
+  background: #0c0c12;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  /* Own compositor layer so scroll doesn't thrash the rest of the page. */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  contain: layout style paint;
 }
 
 .settings-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   padding: 20px 48px 56px 40px;
   scrollbar-width: auto;
   scrollbar-color: rgba(255, 255, 255, 0.38) rgba(255, 255, 255, 0.08);
+  /* Isolate scrolling paint work to this region. */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: scroll-position;
+  contain: layout style;
 }
 
 .settings-body::-webkit-scrollbar {
@@ -615,6 +654,20 @@ body {
   justify-content: space-between;
   margin-bottom: 14px;
   font-size: 22px;
+}
+
+/* Larger hit/target for Magic Remote + 10-foot UI. */
+.settings-panel input[type='checkbox'] {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #ffd6aa;
+  -webkit-appearance: checkbox;
+  appearance: auto;
 }
 
 .settings-row input[type='range'] {

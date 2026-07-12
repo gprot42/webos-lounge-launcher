@@ -139,14 +139,24 @@ export function createSettingsPanel(panel, getConfig, options) {
   function hide() {
     visible = false;
     panel.hidden = true;
+    document.body.classList.remove('settings-open');
     if (options.onClose) options.onClose();
   }
 
   function show() {
     visible = true;
     panel.hidden = false;
-    render();
+    // Freeze/hide expensive launcher layers while settings scrolls (see CSS).
+    document.body.classList.add('settings-open');
     if (options.onOpen) options.onOpen();
+    // render() is async (manifests / app lists). Focus after the panel DOM
+    // exists so wheel / arrows land on a real control.
+    Promise.resolve(render()).then(function () {
+      if (!visible) return;
+      if (options.onRendered) options.onRendered();
+    }).catch(function (err) {
+      console.error(err);
+    });
   }
 
   function labeledControl(label, control) {
@@ -637,12 +647,20 @@ export function createSettingsPanel(panel, getConfig, options) {
     perfModeToggle.dataset.focusIndex = '9207';
     launcherSection.appendChild(labeledControl('Performance mode (low-spec TVs)', perfModeToggle));
 
-    const returnToggle = document.createElement('input');
-    returnToggle.type = 'checkbox';
-    returnToggle.checked = !!config.launcher.returnOnAppExit;
-    returnToggle.className = 'focusable';
-    returnToggle.dataset.focusIndex = '921';
-    launcherSection.appendChild(labeledControl('Return when app exits', returnToggle));
+    // Off by default: when enabled, stock Home coming to the foreground
+    // (Home button press after another app, or an app exiting to home)
+    // relaunches Lounge.
+    const launchOnHomeToggle = document.createElement('input');
+    launchOnHomeToggle.type = 'checkbox';
+    launchOnHomeToggle.checked = !!(config.launcher.launchOnHome || config.launcher.returnOnAppExit);
+    launchOnHomeToggle.className = 'focusable';
+    launchOnHomeToggle.dataset.focusIndex = '921';
+    launcherSection.appendChild(labeledControl('Launch on Home button', launchOnHomeToggle));
+
+    const launchOnHomeHint = document.createElement('p');
+    launchOnHomeHint.className = 'settings-hint';
+    launchOnHomeHint.textContent = 'When enabled, pressing Home while in another app opens Lounge instead of the stock home screen. Off by default.';
+    launcherSection.appendChild(launchOnHomeHint);
 
     const bootToggle = document.createElement('input');
     bootToggle.type = 'checkbox';
@@ -896,7 +914,9 @@ export function createSettingsPanel(panel, getConfig, options) {
       config.launcher.iconLayout = iconLayoutSelect.value;
       config.launcher.iconsPerRow = parseInt(iconsPerRowSelect.value, 10) || 7;
       config.launcher.perfMode = perfModeToggle.checked;
-      config.launcher.returnOnAppExit = returnToggle.checked;
+      config.launcher.launchOnHome = launchOnHomeToggle.checked;
+      // Keep legacy key in sync so older builds / USB config still work.
+      config.launcher.returnOnAppExit = launchOnHomeToggle.checked;
       config.launcher.bootOnStart = bootToggle.checked;
       config.launcher.pinnedApps = pinnedOrder.slice();
       config.launcher.customApps = customApps.slice();

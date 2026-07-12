@@ -5,9 +5,10 @@
   "type": "web",
   "main": "index.html",
   "title": "Lounge",
-  "icon": "assets/icon.png",
-  "miniicon": "assets/icon-mini.png",
-  "largeIcon": "assets/icon-large.png",
+  "icon": "assets/icon-80-v5.png",
+  "miniicon": "assets/icon-60-v5.png",
+  "largeIcon": "assets/icon-130-v5.png",
+  "iconColor": "#1a3a58",
   "uiRevision": 2,
   "appDescription": "Settle in. Pick what to watch.",
   "requiredPermissions": [

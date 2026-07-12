@@ -4,7 +4,7 @@ import {normalizeMusicConfig} from './builtin-music.js';
 const STORAGE_KEY = 'lounge.config.v1';
 
 export const DEFAULT_CONFIG = {
-  version: 14,
+  version: 15,
   profile: 'default',
   profiles: {},
   background: {
@@ -49,7 +49,10 @@ export const DEFAULT_CONFIG = {
     iconsPerRow: 7,
     perfMode: false,
     bootOnStart: false,
-    returnOnAppExit: false
+    returnOnAppExit: false,
+    // When true, press of the Home button (stock home coming to the
+    // foreground after another app) relaunches Lounge. Off by default.
+    launchOnHome: false
   }
 };
 
@@ -212,6 +215,16 @@ function migrateConfig(config) {
       config.launcher.iconsPerRow = 7;
     }
     config.version = 14;
+    saveConfig(config);
+  }
+
+  if ((config.version || 1) < 15) {
+    // New launchOnHome setting. Preserve any existing returnOnAppExit preference
+    // so users who already opted into home-intercept keep that behaviour.
+    if (typeof config.launcher.launchOnHome !== 'boolean') {
+      config.launcher.launchOnHome = !!config.launcher.returnOnAppExit;
+    }
+    config.version = 15;
     saveConfig(config);
   }
 

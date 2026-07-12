@@ -1,89 +1,56 @@
 #!/usr/bin/env python3
-"""Generate Lounge launcher icons with a TV in front of the lounge chair."""
+"""Generate Lounge Launcher icons from the source lounge mark.
+
+Source art: assets/icon-source.png — full-bleed pictogram (no baked-in title).
+webOS already shows the app title under the tile, so the icon itself stays
+visual-only and readable at 60–80px.
+
+Outputs (versioned filenames so Home drops its path-keyed icon cache):
+  icon.png / icon-80-v5.png (80)
+  icon-mini.png / icon-60-v5.png (60)
+  icon-large.png / icon-130-v5.png (130)
+
+Bump ICON_TAG (and appinfo.json paths) whenever the art changes.
+"""
 
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
 SOURCE = ASSETS / "icon-source.png"
 
+# Bump when art changes — must match appinfo.json icon paths.
+ICON_TAG = "v5"
+
+# Slight center crop so subject stays inside OS rounded-square masks.
+SAFE_CROP = 0.04
+
 
 def make_icon(size: int) -> Image.Image:
-    scale = size / 80.0
-    base = Image.open(SOURCE).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+    src = Image.open(SOURCE).convert("RGBA")
+    w, h = src.size
+    side = min(w, h)
+    # Center-crop square, then inset for mask safety.
+    left = (w - side) // 2
+    top = (h - side) // 2
+    square = src.crop((left, top, left + side, top + side))
 
-    overlay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    inset = int(round(side * SAFE_CROP))
+    if inset > 0 and side - 2 * inset >= 8:
+        square = square.crop((inset, inset, side - inset, side - inset))
 
-    tv_left = int(18 * scale)
-    tv_top = int(30 * scale)
-    tv_right = int(62 * scale)
-    tv_bottom = int(58 * scale)
-    bezel = max(1, int(2 * scale))
-    stand_w = int(10 * scale)
-    stand_h = max(1, int(3 * scale))
-    base_w = int(22 * scale)
-    base_h = max(1, int(2 * scale))
-
-    tv_color = (8, 5, 4, 255)
-    screen_color = (18, 12, 10, 255)
-
-    draw.rounded_rectangle(
-        [tv_left, tv_top, tv_right, tv_bottom],
-        radius=max(2, int(3 * scale)),
-        fill=tv_color,
-    )
-    draw.rounded_rectangle(
-        [
-            tv_left + bezel,
-            tv_top + bezel,
-            tv_right - bezel,
-            tv_bottom - bezel - int(4 * scale),
-        ],
-        radius=max(1, int(2 * scale)),
-        fill=screen_color,
-    )
-
-    cx = (tv_left + tv_right) // 2
-    draw.rounded_rectangle(
-        [
-            cx - stand_w // 2,
-            tv_bottom - int(2 * scale),
-            cx + stand_w // 2,
-            tv_bottom + stand_h,
-        ],
-        radius=max(1, int(1 * scale)),
-        fill=tv_color,
-    )
-    draw.rounded_rectangle(
-        [
-            cx - base_w // 2,
-            tv_bottom + stand_h,
-            cx + base_w // 2,
-            tv_bottom + stand_h + base_h,
-        ],
-        radius=max(1, int(1 * scale)),
-        fill=tv_color,
-    )
-
-    highlight = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    hd = ImageDraw.Draw(highlight)
-    hd.line(
-        [(tv_left + bezel, tv_top + bezel), (tv_right - bezel, tv_top + bezel)],
-        fill=(40, 28, 22, 90),
-        width=max(1, int(1 * scale)),
-    )
-
-    result = Image.alpha_composite(base, overlay)
-    result = Image.alpha_composite(result, highlight)
-    return result.convert("RGB")
+    icon = square.resize((size, size), Image.Resampling.LANCZOS)
+    # Tiny unsharp for small tiles so the couch/TV edge stays crisp.
+    if size <= 80:
+        icon = icon.filter(ImageFilter.UnsharpMask(radius=0.6, percent=120, threshold=2))
+    return icon.convert("RGB")
 
 
 def render(name: str, size: int) -> None:
     output = ASSETS / name
-    make_icon(size).save(output)
+    make_icon(size).save(output, "PNG", optimize=True)
     print(f"Wrote {output} ({size}x{size})")
 
 
@@ -91,9 +58,18 @@ def main() -> None:
     if not SOURCE.exists():
         raise SystemExit(f"Missing source icon: {SOURCE}")
 
+    tag = ICON_TAG
     render("icon.png", 80)
+    render(f"icon-80-{tag}.png", 80)
     render("icon-mini.png", 60)
+    render(f"icon-60-{tag}.png", 60)
     render("icon-large.png", 130)
+    render(f"icon-130-{tag}.png", 130)
+
+    # Unversioned aliases for tooling / install size checks
+    render("icon-80.png", 80)
+    render("icon-60.png", 60)
+    render("icon-130.png", 130)
 
 
 if __name__ == "__main__":

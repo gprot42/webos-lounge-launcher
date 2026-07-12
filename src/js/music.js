@@ -41,7 +41,7 @@ export function createMusicPlayer(getConfig, elements) {
   let userPaused = false;
 
   function trackLabel(track) {
-    if (!track) return 'No music loaded';
+    if (!track) return '';
 
     if (track.artist && track.title) {
       return track.artist + ' — ' + track.title;

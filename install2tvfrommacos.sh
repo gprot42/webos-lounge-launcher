@@ -229,13 +229,17 @@ build_and_package() {
 
 install_ipk_ssh() {
 	local ipk="$1" base remote_dir remote_ipk payload version install_cmd log_file
-	local max_wait=180 elapsed=0 output appinfo_path
+	local max_wait=180 elapsed=0 output appinfo_path icon_path expected_icon_bytes
 	base="$(basename "$ipk")"
 	remote_dir="/media/developer/temp"
 	remote_ipk="${remote_dir}/${base}"
 	log_file="/tmp/lounge-install-${base}.log"
 	appinfo_path="/media/developer/apps/usr/palm/applications/${APP_ID}/appinfo.json"
+	icon_path="/media/developer/apps/usr/palm/applications/${APP_ID}/assets/icon.png"
 	version="$(read_version)"
+	# Byte size of the icon we are shipping — used to confirm the install actually
+	# overwrote assets (same-version reinstalls can leave old files in place).
+	expected_icon_bytes="$(wc -c <"$SCRIPT_DIR/dist/assets/icon.png" | tr -d ' ')"
 
 	luna_oneshot_tv 'luna://com.webos.applicationManager/closeByAppId' "{\"id\":\"${APP_ID}\"}"
 	# closeByAppId only *suspends* the web app; webOS resumes the same in-memory
@@ -253,7 +257,9 @@ install_ipk_ssh() {
 	install_cmd="$(luna_subscribe_tv_cmd 'luna://com.webos.appInstallService/dev/install' "$payload" 25 60000)"
 	# dev/install streams progress replies; a foreground ssh -tt subscribe can hang
 	# after "installed" while luna-send-pub waits for more replies. Run on-TV in the
-	# background and poll the log + appinfo.json instead.
+	# background and poll the install log. Do NOT treat an already-matching
+	# appinfo version as success — same-version reinstalls used to short-circuit
+	# here and leave old icons/assets on disk while the script reported OK.
 	printf "  %s\n" "Installing on TV (via appinstalld)..."
 	ssh_tv "rm -f '${log_file}'; nohup ${install_cmd} > '${log_file}' 2>&1 </dev/null &"
 
@@ -264,9 +270,6 @@ install_ipk_ssh() {
 		if ssh_tv "test -f '${log_file}' && grep -q '\"state\":\"failed\"' '${log_file}'"; then
 			output="$(ssh_tv "cat '${log_file}'" 2>/dev/null || true)"
 			die "SSH install failed for ${APP_ID} ${version}. Output: ${output}"
-		fi
-		if ssh_tv "test -f '${appinfo_path}' && grep -q '\"version\": *\"${version}\"' '${appinfo_path}'"; then
-			break
 		fi
 		printf "  %s\n" "Waiting for install... (${elapsed}s)"
 		sleep 2
@@ -280,6 +283,15 @@ install_ipk_ssh() {
 
 	ssh_tv "grep -q '\"version\": *\"${version}\"' '${appinfo_path}'" \
 		|| die "SSH install did not update ${APP_ID} to version ${version} on the TV"
+
+	# Confirm assets were actually replaced (catches same-version no-op installs).
+	if [[ -n "$expected_icon_bytes" && "$expected_icon_bytes" -gt 0 ]]; then
+		local remote_icon_bytes
+		remote_icon_bytes="$(ssh_tv "wc -c <'${icon_path}' 2>/dev/null" | tr -d '[:space:]' || true)"
+		if [[ "$remote_icon_bytes" != "$expected_icon_bytes" ]]; then
+			die "Install reported success but icon size is ${remote_icon_bytes:-missing} bytes (expected ${expected_icon_bytes}). Same-version reinstall may have been skipped — bump version.md and retry."
+		fi
+	fi
 
 	ssh_tv "rm -f '${remote_ipk}' '${log_file}'"
 	ssh_tv "/usr/sbin/ls-control scan-services" >/dev/null

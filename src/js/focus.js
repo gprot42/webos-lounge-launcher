@@ -37,14 +37,22 @@ export function createFocusManager(root, handlers) {
     });
   }
 
-  function scrollableAncestor(el) {
+  function scrollableAncestor(el, axis) {
     let node = el.parentElement;
     while (node && node !== document.body) {
       const style = window.getComputedStyle(node);
-      const overflowX = style.overflowX;
-      if ((overflowX === 'auto' || overflowX === 'scroll') &&
-          node.scrollWidth > node.clientWidth + 1) {
-        return node;
+      if (axis === 'y') {
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') &&
+            node.scrollHeight > node.clientHeight + 1) {
+          return node;
+        }
+      } else {
+        const overflowX = style.overflowX;
+        if ((overflowX === 'auto' || overflowX === 'scroll') &&
+            node.scrollWidth > node.clientWidth + 1) {
+          return node;
+        }
       }
       node = node.parentElement;
     }
@@ -55,7 +63,7 @@ export function createFocusManager(root, handlers) {
   // row never scrolls horizontally. Manually keep the focused tile inside the
   // scroll container's viewport by adjusting scrollLeft.
   function ensureHorizontallyVisible(el) {
-    const container = scrollableAncestor(el);
+    const container = scrollableAncestor(el, 'x');
     if (!container) return;
     const cRect = container.getBoundingClientRect();
     const eRect = el.getBoundingClientRect();
@@ -64,6 +72,27 @@ export function createFocusManager(root, handlers) {
       container.scrollLeft -= (cRect.left + margin) - eRect.left;
     } else if (eRect.right > cRect.right - margin) {
       container.scrollLeft += eRect.right - (cRect.right - margin);
+    }
+  }
+
+  // Instant vertical keep-in-view (no smooth scroll). scrollIntoView on webOS
+  // can lag a frame or two while the compositor repaints a large settings
+  // panel; direct scrollTop writes redraw immediately. Walks every nested
+  // overflow container (e.g. settings-apps inside settings-body).
+  function ensureVerticallyVisible(el) {
+    let node = el;
+    const margin = 28;
+    while (node && node !== document.body) {
+      const container = scrollableAncestor(node, 'y');
+      if (!container) break;
+      const cRect = container.getBoundingClientRect();
+      const eRect = el.getBoundingClientRect();
+      if (eRect.top < cRect.top + margin) {
+        container.scrollTop -= (cRect.top + margin) - eRect.top;
+      } else if (eRect.bottom > cRect.bottom - margin) {
+        container.scrollTop += eRect.bottom - (cRect.bottom - margin);
+      }
+      node = container;
     }
   }
 
@@ -78,13 +107,7 @@ export function createFocusManager(root, handlers) {
     // Report success so callers can skip it and advance to the next candidate.
     const landed = document.activeElement === el;
     ensureHorizontallyVisible(el);
-    if (el.scrollIntoView) {
-      try {
-        el.scrollIntoView({block: 'nearest', inline: 'nearest'});
-      } catch (err) {
-        el.scrollIntoView(false);
-      }
-    }
+    ensureVerticallyVisible(el);
     if (landed) {
       el.classList.add('focused');
       items.forEach(function (item) {
@@ -179,16 +202,74 @@ export function createFocusManager(root, handlers) {
     focusItem(target);
   }
 
-  function moveSequential(active, delta) {
-    const scoped = items.filter(function (item) {
-      return focusRow(item) === 'settings';
+  function settingsFocusables() {
+    return items.filter(function (item) {
+      return focusRow(item) === 'settings' && isFocusable(item);
     });
+  }
+
+  function moveSequential(active, delta) {
+    const scoped = settingsFocusables();
     const idx = scoped.indexOf(active);
-    if (idx < 0) return false;
+    if (idx < 0) {
+      // Focus is outside the panel — enter at the first/last control.
+      if (!scoped.length) return false;
+      focusItem(delta > 0 ? scoped[0] : scoped[scoped.length - 1]);
+      return true;
+    }
     const next = scoped[idx + delta];
-    if (!next) return true;
+    if (!next) return true; // at edge; swallow so spatial nav doesn't escape
     focusItem(next);
     return true;
+  }
+
+  // Magic Remote scroll wheel → previous/next settings option.
+  // webOS fires standard wheel events; without a handler the panel either
+  // does nothing useful or only pixel-scrolls without moving focus.
+  let wheelAccum = 0;
+  let wheelLockUntil = 0;
+  const WHEEL_STEP_PX = 48;
+  const WHEEL_STEP_MS = 110;
+
+  function onWheel(event) {
+    const settingsOpen = document.body.classList.contains('settings-open');
+    if (!settingsOpen) return;
+
+    // Don't steal the wheel while typing in a text field.
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      const type = (active.type || '').toLowerCase();
+      if (type === 'text' || type === 'number' || type === 'search' || type === 'password' ||
+          active.tagName === 'TEXTAREA') {
+        return;
+      }
+    }
+
+    // Always own the wheel inside settings so we can step focus instead of
+    // leaving a laggy native pixel scroll with no selection movement.
+    event.preventDefault();
+    event.stopPropagation();
+
+    const dy = event.deltaY || 0;
+    // deltaMode: 0=pixel, 1=line, 2=page. Magic Remote is usually pixels;
+    // normalize line/page into a comparable scale.
+    const scale = event.deltaMode === 1 ? 24 : event.deltaMode === 2 ? 240 : 1;
+    wheelAccum += dy * scale;
+
+    const now = Date.now();
+    if (now < wheelLockUntil) return;
+    if (Math.abs(wheelAccum) < WHEEL_STEP_PX) return;
+
+    const dir = wheelAccum > 0 ? 1 : -1;
+    wheelAccum = 0;
+    wheelLockUntil = now + WHEEL_STEP_MS;
+    lastKeyNavAt = now;
+
+    collect();
+    const current = document.activeElement && focusRow(document.activeElement) === 'settings'
+      ? document.activeElement
+      : null;
+    moveSequential(current, dir);
   }
 
   function adjustValueControl(el, dir) {
@@ -447,6 +528,8 @@ export function createFocusManager(root, handlers) {
   }
 
   document.addEventListener('keydown', onKeyDown);
+  // Capture phase so we see the wheel even if a child stops bubbling.
+  document.addEventListener('wheel', onWheel, {passive: false, capture: true});
   root.addEventListener('mousemove', onPointerMove);
 
   return {
@@ -454,8 +537,16 @@ export function createFocusManager(root, handlers) {
       collect();
       if (items.length) focusItem(items[0]);
     },
+    focusWithin: function (selector) {
+      collect();
+      const scoped = items.filter(function (item) {
+        return item.closest && item.closest(selector) && isFocusable(item);
+      });
+      if (scoped.length) focusItem(scoped[0]);
+    },
     destroy: function () {
       document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('wheel', onWheel, {capture: true});
       root.removeEventListener('mousemove', onPointerMove);
     }
   };
