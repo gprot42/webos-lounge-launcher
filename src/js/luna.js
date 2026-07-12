@@ -194,6 +194,28 @@ function normalizeListedApps(res) {
 }
 
 /**
+ * Build a root `luna-send` command line for this TV's 2011-era binary.
+ *
+ * That build requires `-i` (interactive) or it prints nothing; `-n 1` exits
+ * after one reply; `-w` is a hard timeout. Newer TVs accept the same flags.
+ */
+export function lunaSendRootCommand(uri, payloadJson, waitMs) {
+  const wait = waitMs || 4000;
+  const payload = payloadJson == null ? '{}' : String(payloadJson);
+  // Single-quoted payload; escape any embedded single quotes for the shell.
+  const safePayload = payload.replace(/'/g, "'\\''");
+  return "luna-send -i -n 1 -w " + wait + " -f '" + uri + "' '" + safePayload + "'";
+}
+
+function readExecStdout(res) {
+  let out = res && res.stdoutString ? String(res.stdoutString) : '';
+  if (!out && res && res.stdoutBytes) {
+    try { out = String(atob(res.stdoutBytes)); } catch (err) { /* ignore */ }
+  }
+  return out.trim();
+}
+
+/**
  * List every installed app via the Homebrew Channel root service.
  *
  * A sandboxed web app cannot call the privileged
@@ -204,14 +226,13 @@ function normalizeListedApps(res) {
  * is unavailable or the output can't be parsed, so callers can fall back.
  */
 function listAppsViaRoot() {
-  const command =
-    "luna-send -n 1 -f 'luna://com.webos.applicationManager/listApps' '{}'";
-  return withTimeout(execRoot(command), 5000).then(function (res) {
-    let out = res && res.stdoutString ? String(res.stdoutString) : '';
-    if (!out && res && res.stdoutBytes) {
-      try { out = String(atob(res.stdoutBytes)); } catch (err) { /* ignore */ }
-    }
-    out = out.trim();
+  const command = lunaSendRootCommand(
+    'luna://com.webos.applicationManager/listApps',
+    '{}',
+    5000
+  );
+  return withTimeout(execRoot(command), 6000).then(function (res) {
+    const out = readExecStdout(res);
     if (!out) throw new Error('empty listApps output');
 
     const data = JSON.parse(out);
@@ -259,21 +280,99 @@ function getForegroundViaRoot() {
   // Same privilege wall as listApps: a sandboxed web app is not allowed to
   // query applicationManager for the foreground app, so the direct/subscription
   // call is denied and never resolves. Running luna-send as root returns it.
-  // `-n 1` with subscribe:true prints the first payload and exits.
-  const command =
-    "luna-send -n 1 -f 'luna://com.webos.applicationManager/getForegroundAppInfo' '{\"subscribe\":true}'";
+  // Must use -i on this TV's luna-send or stdout is empty (see lunaSendRootCommand).
+  const command = lunaSendRootCommand(
+    'luna://com.webos.applicationManager/getForegroundAppInfo',
+    '{"subscribe":true}',
+    4000
+  );
   return withTimeout(execRoot(command), 5000).then(function (res) {
-    let out = res && res.stdoutString ? String(res.stdoutString) : '';
-    if (!out && res && res.stdoutBytes) {
-      try { out = String(atob(res.stdoutBytes)); } catch (err) { /* ignore */ }
-    }
-    out = out.trim();
+    const out = readExecStdout(res);
     if (!out) throw new Error('empty getForegroundAppInfo output');
     const data = JSON.parse(out);
     if (data && data.returnValue === false) {
       throw new Error(data.errorText || 'getForegroundAppInfo failed');
     }
     return {appId: pickForegroundId(data)};
+  });
+}
+
+/**
+ * Launch an app via root luna-send. More reliable from backgrounded contexts
+ * where the sandboxed applicationManager/launch call may be denied or ignored.
+ */
+export function launchAppViaRoot(id) {
+  const command = lunaSendRootCommand(
+    'luna://com.webos.applicationManager/launch',
+    JSON.stringify({id: id}),
+    4000
+  );
+  return withTimeout(execRoot(command), 5000).then(function (res) {
+    const out = readExecStdout(res);
+    if (!out) return {returnValue: true};
+    const data = JSON.parse(out);
+    if (data && data.returnValue === false) {
+      throw new Error(data.errorText || 'launch failed');
+    }
+    return data;
+  });
+}
+
+const LOUNGE_APP_ID = 'org.webosbrew.lounge.launcher';
+const HOME_WATCHER_APP_DIR =
+  '/media/developer/apps/usr/palm/applications/' + LOUNGE_APP_ID;
+const HOME_WATCHER_APP_PATH = HOME_WATCHER_APP_DIR + '/home-watcher.sh';
+const HOME_WATCHER_ENABLE = HOME_WATCHER_APP_DIR + '/enable-home-watcher.sh';
+const HOME_WATCHER_DISABLE = HOME_WATCHER_APP_DIR + '/disable-home-watcher.sh';
+const HOME_WATCHER_PIDFILE = '/tmp/lounge-home-watcher.pid';
+
+/**
+ * Install + start the root Home-button watcher so Home opens Lounge even when
+ * this web app is suspended.
+ *
+ * Runs a packaged enable script (not an inline command string). The previous
+ * inline path joined steps with ";" after a background `&`, which busybox ash
+ * rejects as `unexpected ";"` — enable always failed with "Home watcher failed".
+ */
+export function enableHomeWatcher() {
+  const cmd =
+    'chmod 755 "' + HOME_WATCHER_ENABLE + '" "' + HOME_WATCHER_APP_PATH +
+    '" 2>/dev/null; sh "' + HOME_WATCHER_ENABLE + '"';
+  return withTimeout(execRoot(cmd), 20000).then(function (res) {
+    const out = readExecStdout(res);
+    if (out.indexOf('missing_watcher') >= 0) {
+      throw new Error('home-watcher.sh not installed on TV');
+    }
+    if (out.indexOf('enabled') < 0) {
+      throw new Error(out || 'home watcher failed to start');
+    }
+    return true;
+  });
+}
+
+/**
+ * Stop and remove the root Home-button watcher.
+ */
+export function disableHomeWatcher() {
+  const cmd =
+    'chmod 755 "' + HOME_WATCHER_DISABLE + '" 2>/dev/null; sh "' +
+    HOME_WATCHER_DISABLE + '"';
+  return withTimeout(execRoot(cmd), 8000).then(function () {
+    return true;
+  }).catch(function () {
+    return false;
+  });
+}
+
+/** True when the detached root watcher process is alive. */
+export function isHomeWatcherRunning() {
+  const cmd =
+    'if [ -f "' + HOME_WATCHER_PIDFILE + '" ] && kill -0 $(cat "' +
+    HOME_WATCHER_PIDFILE + '") 2>/dev/null; then echo running; else echo stopped; fi';
+  return withTimeout(execRoot(cmd), 5000).then(function (res) {
+    return readExecStdout(res).indexOf('running') >= 0;
+  }).catch(function () {
+    return false;
   });
 }
 

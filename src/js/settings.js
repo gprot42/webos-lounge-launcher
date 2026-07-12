@@ -13,11 +13,70 @@ import {APP_VERSION} from './version.js';
 const DEFAULT_INPUTS = ['HDMI_1', 'HDMI_2', 'HDMI_3', 'TV'];
 const KEYBOARD_SCROLL_RESERVE = 420;
 
+/**
+ * Gate virtual keyboard on TV text fields.
+ *
+ * webOS opens the on-screen keyboard as soon as a text input is focused, which
+ * is painful when D-pad scrolling through Settings. Keep fields read-only until
+ * the user presses OK/Select (or clicks), then unlock for editing. On blur,
+ * re-lock so the next focus via arrows won't pop the keyboard again.
+ */
+export function isSettingsTextField(el) {
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag !== 'INPUT') return false;
+  const t = String(el.type || 'text').toLowerCase();
+  return t === 'text' || t === 'number' || t === 'search' || t === 'url' || t === 'password';
+}
+
+export function isEditingSettingsText(el) {
+  return isSettingsTextField(el) && el.readOnly === false && el.dataset.tvEdit === '1';
+}
+
+export function beginSettingsTextEdit(el) {
+  if (!isSettingsTextField(el)) return false;
+  el.readOnly = false;
+  el.dataset.tvEdit = '1';
+  try { el.focus(); } catch (err) { /* ignore */ }
+  // Some webOS builds only raise the keyboard after a click once editable.
+  try { el.click(); } catch (err) { /* ignore */ }
+  return true;
+}
+
+export function endSettingsTextEdit(el) {
+  if (!isSettingsTextField(el)) return;
+  el.readOnly = true;
+  delete el.dataset.tvEdit;
+}
+
+function gateTextField(input) {
+  if (!input || input.dataset.tvKeyboardGated === '1') return;
+  input.dataset.tvKeyboardGated = '1';
+  input.readOnly = true;
+
+  input.addEventListener('blur', function () {
+    endSettingsTextEdit(input);
+  });
+
+  // Magic Remote pointer: click should enter edit mode (same as OK).
+  input.addEventListener('click', function (event) {
+    if (input.readOnly) {
+      event.preventDefault();
+      beginSettingsTextEdit(input);
+    }
+  });
+}
+
 function attachInputScrollHelpers(scrollContainer) {
   if (!scrollContainer) return;
 
   scrollContainer.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(function (input) {
+    gateTextField(input);
+
     input.addEventListener('focus', function () {
+      // Only scroll for keyboard when actually editing (Select pressed).
+      if (input.readOnly) return;
       window.setTimeout(function () {
         const containerRect = scrollContainer.getBoundingClientRect();
         const inputRect = input.getBoundingClientRect();
@@ -123,11 +182,18 @@ function createOptionStepper(className, focusIndex, optionList, currentValue, on
 
 export function createSettingsPanel(panel, getConfig, options) {
   let visible = false;
+  let opening = false;
+  let renderGen = 0;
   let builtinManifest = [];
   let pinnedOrder = [];
   let pinnedContainer = null;
   let appsByIdMap = {};
   let customApps = [];
+  // After open, ignore pointer/click for a short window so the Magic Remote
+  // "click" that opened Settings (gear is top-right, Close is also top-right)
+  // does not immediately hit Close and dismiss the panel.
+  let openGuardUntil = 0;
+  let guardHandler = null;
 
   function findCustomApp(id) {
     for (let i = 0; i < customApps.length; i += 1) {
@@ -136,26 +202,145 @@ export function createSettingsPanel(panel, getConfig, options) {
     return null;
   }
 
+  function clearOpenGuard() {
+    openGuardUntil = 0;
+    if (guardHandler) {
+      document.removeEventListener('click', guardHandler, true);
+      document.removeEventListener('pointerup', guardHandler, true);
+      document.removeEventListener('pointerdown', guardHandler, true);
+      guardHandler = null;
+    }
+  }
+
+  function armOpenGuard(ms) {
+    clearOpenGuard();
+    openGuardUntil = Date.now() + (ms || 600);
+    guardHandler = function (event) {
+      if (Date.now() >= openGuardUntil) {
+        clearOpenGuard();
+        return;
+      }
+      // Swallow the trailing OK/click from the same press that opened us.
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation();
+      }
+    };
+    document.addEventListener('click', guardHandler, true);
+    document.addEventListener('pointerup', guardHandler, true);
+    document.addEventListener('pointerdown', guardHandler, true);
+  }
+
+  function requestHide() {
+    if (Date.now() < openGuardUntil) return; // ignore Close during open guard
+    hide();
+  }
+
   function hide() {
     visible = false;
+    opening = false;
+    renderGen += 1; // invalidate any in-flight render
+    clearOpenGuard();
     panel.hidden = true;
     document.body.classList.remove('settings-open');
     if (options.onClose) options.onClose();
   }
 
+  /** Immediate shell so the panel is visible even while async lists load. */
+  function paintLoadingShell() {
+    panel.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'settings-header';
+
+    const headerTitleWrap = document.createElement('div');
+    headerTitleWrap.className = 'settings-header-title';
+    const headerTitle = document.createElement('h2');
+    headerTitle.textContent = 'Settings';
+    headerTitleWrap.appendChild(headerTitle);
+
+    const headerActions = document.createElement('div');
+    headerActions.className = 'settings-header-actions';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'settings-close focusable';
+    closeBtn.dataset.focusIndex = '900';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', requestHide);
+    headerActions.appendChild(closeBtn);
+
+    header.appendChild(headerTitleWrap);
+    header.appendChild(headerActions);
+
+    const body = document.createElement('div');
+    body.className = 'settings-body';
+    const loading = document.createElement('p');
+    loading.className = 'settings-hint settings-loading';
+    loading.textContent = 'Loading settings…';
+    body.appendChild(loading);
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+  }
+
+  function showErrorState(message) {
+    // Never leave a blank black panel.
+    if (!panel.querySelector('.settings-header')) {
+      paintLoadingShell();
+    }
+    const body = panel.querySelector('.settings-body');
+    if (body) {
+      body.innerHTML = '';
+      const msg = document.createElement('p');
+      msg.className = 'settings-hint';
+      msg.textContent = message || 'Could not load settings. Press Close and try again.';
+      body.appendChild(msg);
+    }
+  }
+
   function show() {
+    // Already open — just re-focus (do not rebuild).
+    if (visible && !opening && panel && !panel.hidden && panel.querySelector('.settings-section')) {
+      if (options.onRendered) options.onRendered();
+      return;
+    }
+    // Open already in progress.
+    if (opening && visible && !panel.hidden) return;
+
+    opening = true;
     visible = true;
+    const gen = (renderGen += 1);
+
+    // Paint shell BEFORE hiding underlay so we never flash empty black.
     panel.hidden = false;
-    // Freeze/hide expensive launcher layers while settings scrolls (see CSS).
+    panel.removeAttribute('hidden');
+    paintLoadingShell();
     document.body.classList.add('settings-open');
+    armOpenGuard(700);
+
     if (options.onOpen) options.onOpen();
-    // render() is async (manifests / app lists). Focus after the panel DOM
-    // exists so wheel / arrows land on a real control.
-    Promise.resolve(render()).then(function () {
-      if (!visible) return;
+    // Delay focus until after the opening click sequence finishes, otherwise
+    // focus lands on Close under the cursor and the same OK closes us.
+    setTimeout(function () {
+      if (!visible || gen !== renderGen) return;
+      if (options.onRendered) options.onRendered();
+    }, 350);
+
+    Promise.resolve(render(gen)).then(function () {
+      if (!visible || gen !== renderGen) return;
+      opening = false;
+      // If render bailed early without sections, keep a usable shell.
+      if (!panel.querySelector('.settings-section')) {
+        showErrorState('Settings did not finish loading. Close and open again.');
+      }
       if (options.onRendered) options.onRendered();
     }).catch(function (err) {
       console.error(err);
+      if (!visible || gen !== renderGen) return;
+      opening = false;
+      showErrorState('Could not load settings. Close and try again.');
+      if (options.onRendered) options.onRendered();
     });
   }
 
@@ -264,16 +449,37 @@ export function createSettingsPanel(panel, getConfig, options) {
     });
   }
 
-  async function render() {
+  function withDeadline(promise, ms) {
+    return new Promise(function (resolve) {
+      let done = false;
+      const timer = setTimeout(function () {
+        if (!done) { done = true; resolve(null); }
+      }, ms);
+      Promise.resolve(promise).then(function (value) {
+        if (!done) { done = true; clearTimeout(timer); resolve(value); }
+      }, function () {
+        if (!done) { done = true; clearTimeout(timer); resolve(null); }
+      });
+    });
+  }
+
+  async function render(gen) {
     const config = getConfig();
     const effective = applyActiveProfile(config);
     const bg = normalizeBackgroundConfig(effective.background);
-    builtinManifest = await loadBuiltinManifest();
+    // Cap waits so the panel never sits empty after we clear the loading shell.
+    const loaded = await withDeadline(loadBuiltinManifest(), 4000);
+    if (gen !== renderGen || !visible) return;
+    builtinManifest = loaded || builtinManifest || [];
+
     pinnedOrder = (config.launcher.pinnedApps || []).slice();
     customApps = (config.launcher.customApps || []).map(function (entry) {
       return Object.assign({}, entry);
     });
-    panel.innerHTML = '';
+
+    // Keep the loading shell until we have a header ready, then replace in one go
+    // via a document fragment so the panel is never empty/black.
+    const next = document.createDocumentFragment();
 
     const header = document.createElement('div');
     header.className = 'settings-header';
@@ -321,16 +527,16 @@ export function createSettingsPanel(panel, getConfig, options) {
     closeBtn.className = 'settings-close focusable';
     closeBtn.dataset.focusIndex = '900';
     closeBtn.textContent = 'Close';
-    closeBtn.addEventListener('click', hide);
+    closeBtn.addEventListener('click', requestHide);
     headerActions.appendChild(closeBtn);
 
     header.appendChild(headerTitleWrap);
     header.appendChild(headerActions);
-    panel.appendChild(header);
+    next.appendChild(header);
 
     const body = document.createElement('div');
     body.className = 'settings-body';
-    panel.appendChild(body);
+    next.appendChild(body);
 
     const profileSection = document.createElement('section');
     profileSection.className = 'settings-section';
@@ -475,8 +681,15 @@ export function createSettingsPanel(panel, getConfig, options) {
 
     syncFields();
 
+    // Swap loading shell → full chrome now (profile + background already in body).
+    // Remaining sections append to the live body so the user always sees content.
+    panel.innerHTML = '';
+    panel.appendChild(next);
+
     const music = normalizeMusicConfig(config.music);
-    const builtinTracks = await loadBuiltinMusicManifest();
+    const builtinTracks = (await withDeadline(loadBuiltinMusicManifest(), 4000)) || [];
+
+    if (gen !== renderGen || !visible) return;
 
     const musicSection = document.createElement('section');
     musicSection.className = 'settings-section';
@@ -659,7 +872,7 @@ export function createSettingsPanel(panel, getConfig, options) {
 
     const launchOnHomeHint = document.createElement('p');
     launchOnHomeHint.className = 'settings-hint';
-    launchOnHomeHint.textContent = 'When enabled, pressing Home while in another app opens Lounge instead of the stock home screen. Off by default.';
+    launchOnHomeHint.textContent = 'When enabled, a root service opens Lounge whenever stock Home appears. A brief flash of the LG home screen is normal (the TV opens Home first; we cannot block the key without a separate input-hook app). Requires rooted TV + Homebrew Channel. Toggle off/on and Save after updates if it stops working.';
     launcherSection.appendChild(launchOnHomeHint);
 
     const bootToggle = document.createElement('input');
@@ -925,15 +1138,19 @@ export function createSettingsPanel(panel, getConfig, options) {
 
       saveConfig(config);
       if (options.onSave) options.onSave(config);
-      if (config.launcher.bootOnStart && options.onToast) {
+      if (config.launcher.launchOnHome && options.onToast) {
+        options.onToast('Enabling Home → Lounge watcher…');
+      } else if (config.launcher.bootOnStart && options.onToast) {
         options.onToast('Boot on start saved — enable Homebrew Autostart on your TV');
       }
       hide();
     });
     headerActions.insertBefore(saveBtn, closeBtn);
 
-    await loadInputSettings(inputsList, config);
-    await loadAppsLists(pinnedList, addAppsList, config);
+    await withDeadline(loadInputSettings(inputsList, config), 6000);
+    if (gen !== renderGen || !visible) return;
+    await withDeadline(loadAppsLists(pinnedList, addAppsList, config), 8000);
+    if (gen !== renderGen || !visible) return;
     attachInputScrollHelpers(body);
   }
 

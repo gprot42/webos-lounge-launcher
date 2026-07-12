@@ -8,7 +8,15 @@ import {createAppGrid} from './apps.js';
 import {createInputRow} from './inputs.js';
 import {createFocusManager} from './focus.js';
 import {createSettingsPanel} from './settings.js';
-import {getForegroundApp, launchApp, listApps, closeApp} from './luna.js';
+import {
+  getForegroundApp,
+  launchApp,
+  launchAppViaRoot,
+  listApps,
+  closeApp,
+  enableHomeWatcher,
+  disableHomeWatcher
+} from './luna.js';
 import {isHomeApp} from './remote.js';
 import {isTerminalAppId, getAppIdCandidates} from './app-icons.js';
 
@@ -22,6 +30,7 @@ let returningToLounge = false;
 let launchPending = false;
 let wentHiddenSinceLaunch = false;
 let launchAt = 0;
+let lastHomeLaunchAt = 0;
 
 const elements = {
   backgroundLayer: document.getElementById('background-layer'),
@@ -67,6 +76,24 @@ elements.onToast = showToast;
 const background = createBackgroundController(elements, getConfig);
 const music = createMusicPlayer(getConfig, Object.assign({}, elements, {onToast: showToast}));
 const inputs = createInputRow(elements.inputRow, getConfig, {onToast: showToast});
+function syncHomeWatcher(config, opts) {
+  const quiet = opts && opts.quiet;
+  const on = !!(config && config.launcher && config.launcher.launchOnHome);
+  const apply = on ? enableHomeWatcher : disableHomeWatcher;
+  return apply().then(function () {
+    if (on && !quiet) showToast('Home button → Lounge is active');
+  }).catch(function (err) {
+    console.error(err);
+    if (on) {
+      const detail = err && err.message ? String(err.message) : '';
+      const short = detail.replace(/\s+/g, ' ').slice(0, 90);
+      showToast(short
+        ? 'Home watcher failed: ' + short
+        : 'Home watcher failed — check root / Homebrew Channel');
+    }
+  });
+}
+
 const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
   onOpen: function () {
     music.fadeInAndResume();
@@ -80,6 +107,7 @@ const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
   onSave: function (savedConfig) {
     setConfig(savedConfig);
     refreshAll();
+    syncHomeWatcher(savedConfig);
   },
   onClose: function () {
     focus.refresh();
@@ -151,7 +179,13 @@ async function openTvSettings() {
 }
 
 if (elements.appSettingsBtn) {
-  elements.appSettingsBtn.addEventListener('click', function () {
+  // Use click only (not pointerup+click). Dual handlers raced with Settings
+  // Close, which sits in the same top-right corner as the gear on Magic Remote.
+  elements.appSettingsBtn.addEventListener('click', function (event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     settings.show();
   });
 }
@@ -293,26 +327,62 @@ async function refreshAll() {
   focus.refresh();
 }
 
-// Reclaim system keyboard/pointer focus and re-select an item. After returning
-// from another app the webview can come back without an active focus target,
-// which makes the whole UI feel frozen (remote/pointer do nothing).
+// Reclaim system keyboard/pointer focus and re-select a dock tile.
+// After Home-button intercept, webOS often leaves INPUT routed to stock Home
+// even though Lounge is painted on top — remote OK does nothing until we
+// re-assert window focus and a real focusable tile.
 function reclaimInput() {
+  // Clear any stuck settings-open dim/hide that would block the dock.
+  if (settings && !settings.isVisible()) {
+    document.body.classList.remove('settings-open');
+    if (elements.settingsPanel) {
+      elements.settingsPanel.hidden = true;
+    }
+  }
   try { window.focus(); } catch (err) { /* ignore */ }
   try { document.body && document.body.focus && document.body.focus(); } catch (err) { /* ignore */ }
-  focus.refresh();
+  try {
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+  } catch (err) { /* ignore */ }
+  if (focus && typeof focus.focusHomeDock === 'function') {
+    focus.focusHomeDock();
+  } else {
+    focus.refresh();
+  }
+}
+
+let resumeTimer = null;
+function scheduleReclaimBursts() {
+  // webOS may deliver input ownership a few hundred ms after the surface paints.
+  reclaimInput();
+  clearTimeout(scheduleReclaimBursts.t1);
+  clearTimeout(scheduleReclaimBursts.t2);
+  clearTimeout(scheduleReclaimBursts.t3);
+  scheduleReclaimBursts.t1 = setTimeout(reclaimInput, 250);
+  scheduleReclaimBursts.t2 = setTimeout(reclaimInput, 800);
+  scheduleReclaimBursts.t3 = setTimeout(reclaimInput, 1600);
 }
 
 function handleResume() {
   visible = true;
-  const config = getConfig();
-  if (config.music && config.music.resumeOnReturn) {
-    music.fadeInAndResume();
-  }
-  refreshAll().then(reclaimInput, function (err) {
-    // Never leave the launcher unselectable after returning from another app.
-    console.error(err);
-    reclaimInput();
-  });
+  launchPending = false;
+  returningToLounge = false;
+  // Debounce stacked resume events (visibility + webOSRelaunch + focus).
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(function () {
+    const config = getConfig();
+    if (config.music && config.music.resumeOnReturn) {
+      music.fadeInAndResume();
+    }
+    refreshAll().then(function () {
+      scheduleReclaimBursts();
+    }, function (err) {
+      console.error(err);
+      scheduleReclaimBursts();
+    });
+  }, 50);
 }
 
 function handleVisibilityChange() {
@@ -334,21 +404,37 @@ function shouldInterceptHome(launcher) {
   return !!(launcher.launchOnHome || launcher.returnOnAppExit);
 }
 
+async function launchLoungeBestEffort() {
+  try {
+    await launchApp(APP_ID);
+    return;
+  } catch (err) {
+    // Sandboxed launch often fails while we are backgrounded.
+  }
+  try {
+    await launchAppViaRoot(APP_ID);
+  } catch (err) {
+    // Best-effort.
+  }
+}
+
 async function maybeReturnToLounge(appId) {
   const config = getConfig();
   if (!shouldInterceptHome(config.launcher)) return;
   if (returningToLounge) return;
   if (appId === APP_ID) return;
-
-  const wasOtherApp = lastForegroundAppId && lastForegroundAppId !== APP_ID;
-  if (!wasOtherApp) return;
   if (!isHomeApp(appId)) return;
 
+  // Rate-limit: root watcher + in-app poll can both fire.
+  const now = Date.now();
+  if (now - lastHomeLaunchAt < 1500) return;
+  lastHomeLaunchAt = now;
+
+  // In-app backup for the root home-watcher: whenever stock Home is foreground,
+  // bring Lounge forward. (Root watcher is the reliable path when suspended.)
   returningToLounge = true;
   try {
-    await launchApp(APP_ID);
-  } catch (err) {
-    // Best-effort relaunch.
+    await launchLoungeBestEffort();
   } finally {
     returningToLounge = false;
   }
@@ -356,6 +442,8 @@ async function maybeReturnToLounge(appId) {
 
 function startForegroundWatcher() {
   if (!window.webOS || !window.webOS.service) return;
+
+  const pollMs = shouldInterceptHome(getBaseConfig().launcher) ? 800 : 2000;
 
   foregroundTimer = setInterval(async function () {
     // Keep polling while backgrounded only when we may need to intercept Home.
@@ -422,12 +510,18 @@ function startForegroundWatcher() {
         launchPending = false;
       }
 
+      // We just became the system foreground again (e.g. after Home intercept).
+      // Force input reclaim even if visibilitychange was flaky.
+      if (appId === APP_ID && lastForegroundAppId && lastForegroundAppId !== APP_ID) {
+        scheduleReclaimBursts();
+      }
+
       await maybeReturnToLounge(appId);
       lastForegroundAppId = appId || lastForegroundAppId;
     } catch (err) {
       // Foreground polling is best-effort.
     }
-  }, 2000);
+  }, pollMs);
 }
 
 function handlePowerOff() {
@@ -475,6 +569,12 @@ async function init() {
   window.addEventListener('focus', reclaimInput);
   window.addEventListener('pagehide', handlePowerOff);
   startForegroundWatcher();
+
+  // Re-assert the root Home watcher if the user previously enabled it. The
+  // watcher must be re-detached after every install (hbchannel kills orphans).
+  if (shouldInterceptHome(getBaseConfig().launcher)) {
+    syncHomeWatcher(getBaseConfig(), {quiet: true}).catch(function () { /* ignore */ });
+  }
 }
 
 init().catch(function (err) {

@@ -59,6 +59,16 @@ async function build() {
   copyRecursive(path.join(root, 'assets'), path.join(dist, 'assets'));
   fs.copyFileSync(path.join(root, 'version.md'), path.join(dist, 'version.md'));
 
+  // Root Home-button watcher + enable/disable helpers (started via settings / init.d).
+  ['home-watcher.sh', 'enable-home-watcher.sh', 'disable-home-watcher.sh'].forEach(function (name) {
+    const src = path.join(root, 'scripts', name);
+    if (fs.existsSync(src)) {
+      const dest = path.join(dist, name);
+      fs.copyFileSync(src, dest);
+      try { fs.chmodSync(dest, 0o755); } catch (err) { /* windows */ }
+    }
+  });
+
   const appinfo = JSON.parse(fs.readFileSync(path.join(root, 'appinfo.json'), 'utf8'));
   appinfo.version = version;
   fs.writeFileSync(path.join(dist, 'appinfo.json'), JSON.stringify(appinfo, null, 2) + '\n');

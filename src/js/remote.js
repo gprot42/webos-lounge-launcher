@@ -20,10 +20,12 @@ export const HOME_APP_IDS = [
   'com.webos.app.homeupdater',
   'com.webos.app.dashboard',
   'com.palm.app.home',
-  'com.webos.app.homelauncher'
+  'com.webos.app.homelauncher',
+  'com.webos.app.gamehome',
+  'com.webos.app.seniorhome'
 ];
 
 export function isHomeApp(appId) {
-  if (!appId) return true;
+  if (!appId) return false;
   return HOME_APP_IDS.indexOf(appId) >= 0;
 }

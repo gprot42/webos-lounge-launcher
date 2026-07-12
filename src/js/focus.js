@@ -1,4 +1,10 @@
 import {REMOTE_KEY} from './remote.js';
+import {
+  isSettingsTextField,
+  isEditingSettingsText,
+  beginSettingsTextEdit,
+  endSettingsTextEdit
+} from './settings.js';
 
 const ROW_TOLERANCE = 72;
 const COL_TOLERANCE = 88;
@@ -235,15 +241,8 @@ export function createFocusManager(root, handlers) {
     const settingsOpen = document.body.classList.contains('settings-open');
     if (!settingsOpen) return;
 
-    // Don't steal the wheel while typing in a text field.
-    const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      const type = (active.type || '').toLowerCase();
-      if (type === 'text' || type === 'number' || type === 'search' || type === 'password' ||
-          active.tagName === 'TEXTAREA') {
-        return;
-      }
-    }
+    // Don't steal the wheel while the virtual keyboard is open for editing.
+    if (isEditingSettingsText(document.activeElement)) return;
 
     // Always own the wheel inside settings so we can step focus instead of
     // leaving a laggy native pixel scroll with no selection movement.
@@ -353,6 +352,32 @@ export function createFocusManager(root, handlers) {
     return false; // true first/last focusable item
   }
 
+  function isTopChrome(el) {
+    return !!(el && el.closest && el.closest('.top-bar'));
+  }
+
+  function focusSettingsButton() {
+    const gear = root.querySelector('#app-settings-btn');
+    if (!gear || !isFocusable(gear)) return false;
+    return focusItem(gear);
+  }
+
+  // First focusable in the main dock (inputs → apps → music).
+  function focusMainDockFirst() {
+    const selectors = [
+      '#input-row .focusable',
+      '#app-grid .focusable',
+      '#music-bar .focusable'
+    ];
+    for (let s = 0; s < selectors.length; s += 1) {
+      const list = root.querySelectorAll(selectors[s]);
+      for (let i = 0; i < list.length; i += 1) {
+        if (isFocusable(list[i]) && focusItem(list[i])) return true;
+      }
+    }
+    return false;
+  }
+
   function moveDirection(keyCode) {
     collect();
     if (!items.length) return;
@@ -387,6 +412,9 @@ export function createFocusManager(root, handlers) {
     items.forEach(function (item) {
       if (item === active) return;
       if (!isFocusable(item)) return; // skip hidden/zero-size tiles that still report a rect
+      // Don't spatial-nav into the settings overlay panel from the home dock.
+      if (focusRow(item) === 'settings') return;
+
       const r = item.getBoundingClientRect();
       const ix = r.left + r.width / 2;
       const iy = r.top + r.height / 2;
@@ -404,13 +432,20 @@ export function createFocusManager(root, handlers) {
       }
 
       if (isVertical) {
-        if (Math.abs(dx) > COL_TOLERANCE) return;
+        // Gear sits top-right; allow a much wider column when aiming at top chrome
+        // so UP from any dock tile can still see the settings button.
+        const colLimit = isTopChrome(item) || isTopChrome(active)
+          ? Math.max(COL_TOLERANCE, 900)
+          : COL_TOLERANCE;
+        if (Math.abs(dx) > colLimit) return;
         if (Math.abs(dy) < MIN_PRIMARY_DELTA) return;
       }
 
       const primary = isHorizontal ? Math.abs(dx) : Math.abs(dy);
       const secondary = isHorizontal ? Math.abs(dy) : Math.abs(dx);
-      const score = primary * 100 + secondary;
+      // Prefer top-chrome when moving up so we hit Settings over a distant input.
+      const chromeBias = (keyCode === REMOTE_KEY.UP && isTopChrome(item)) ? -5000 : 0;
+      const score = primary * 100 + secondary + chromeBias;
 
       if (score < bestScore) {
         bestScore = score;
@@ -420,16 +455,27 @@ export function createFocusManager(root, handlers) {
 
     if (best && focusItem(best)) return;
 
-    // Spatial search found nothing (overlapping/stacked tiles, or an edge of a
-    // row) or the target refused focus. Fall back to index-order movement: same
-    // row first, then across all rows, so left/right always advances through the
-    // launcher instead of dead-ending at a row boundary.
+    // Spatial search found nothing. Horizontal: index-order through the dock.
     if (isHorizontal) {
       const row = focusRow(active);
       if (row !== 'settings') {
         const delta = keyCode === REMOTE_KEY.RIGHT ? 1 : -1;
         if (moveByIndexInRow(active, delta)) return;
         moveByGlobalIndex(active, delta);
+      }
+      return;
+    }
+
+    // Vertical edges: UP always reaches Settings; DOWN from Settings returns
+    // to the dock (inputs / apps). This is the main 10-foot path to the gear.
+    if (keyCode === REMOTE_KEY.UP) {
+      if (focusRow(active) !== 'settings' && !isTopChrome(active)) {
+        if (focusSettingsButton()) return;
+      }
+    }
+    if (keyCode === REMOTE_KEY.DOWN) {
+      if (isTopChrome(active)) {
+        if (focusMainDockFirst()) return;
       }
     }
   }
@@ -446,7 +492,9 @@ export function createFocusManager(root, handlers) {
     // TV remote; normalize via event.key so keyboard navigation works too.
     if (event.key) {
       const active = document.activeElement;
-      const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+      // Only treat as "typing" when a settings text field is unlocked for edit
+      // (Select pressed). Readonly text fields still use D-pad for navigation.
+      const typing = isEditingSettingsText(active);
       const keyMap = {
         ArrowLeft: REMOTE_KEY.LEFT,
         ArrowUp: REMOTE_KEY.UP,
@@ -465,6 +513,19 @@ export function createFocusManager(root, handlers) {
     }
 
     if (code === REMOTE_KEY.BACK) {
+      const active = document.activeElement;
+      // Exit text edit (close virtual keyboard) before leaving settings.
+      if (isEditingSettingsText(active)) {
+        event.preventDefault();
+        endSettingsTextEdit(active);
+        try { active.blur(); } catch (err) { /* ignore */ }
+        // Re-focus readonly so D-pad continues from this field.
+        try {
+          active.readOnly = true;
+          active.focus();
+        } catch (err) { /* ignore */ }
+        return;
+      }
       if (handlers && handlers.onBack) {
         event.preventDefault();
         handlers.onBack();
@@ -514,12 +575,34 @@ export function createFocusManager(root, handlers) {
 
     if (code === REMOTE_KEY.LEFT || code === REMOTE_KEY.RIGHT
       || code === REMOTE_KEY.UP || code === REMOTE_KEY.DOWN) {
+      // While the virtual keyboard is up, don't steal arrow keys for spatial nav.
+      if (isEditingSettingsText(document.activeElement)) {
+        return;
+      }
       event.preventDefault();
       moveDirection(code);
       return;
     }
     if (code === REMOTE_KEY.ENTER) {
       const active = document.activeElement;
+      // Text fields: Select unlocks edit mode and opens the virtual keyboard.
+      // Merely focusing via D-pad keeps them readonly so the keyboard stays down.
+      if (isSettingsTextField(active) && active.readOnly) {
+        event.preventDefault();
+        beginSettingsTextEdit(active);
+        return;
+      }
+      if (isEditingSettingsText(active)) {
+        // Second Select finishes editing (dismiss keyboard / lock field).
+        event.preventDefault();
+        endSettingsTextEdit(active);
+        try { active.blur(); } catch (err) { /* ignore */ }
+        try {
+          active.readOnly = true;
+          active.focus();
+        } catch (err) { /* ignore */ }
+        return;
+      }
       if (active && active.classList.contains('focusable')) {
         event.preventDefault();
         active.click();
@@ -535,7 +618,25 @@ export function createFocusManager(root, handlers) {
   return {
     refresh: function () {
       collect();
-      if (items.length) focusItem(items[0]);
+      // Prefer a live, on-screen focusable. Focusing a hidden settings control
+      // (still .focusable in the DOM) fails silently and leaves the dock dead.
+      for (let i = 0; i < items.length; i += 1) {
+        if (!isFocusable(items[i])) continue;
+        // Prefer app tiles / inputs over top-bar chrome when reclaiming.
+        if (focusItem(items[i])) return;
+      }
+    },
+    /** Prefer the first focusable app tile (home dock) after a resume. */
+    focusHomeDock: function () {
+      collect();
+      const tiles = items.filter(function (item) {
+        return isFocusable(item) && item.classList && item.classList.contains('app-tile');
+      });
+      if (tiles.length && focusItem(tiles[0])) return true;
+      for (let i = 0; i < items.length; i += 1) {
+        if (isFocusable(items[i]) && focusItem(items[i])) return true;
+      }
+      return false;
     },
     focusWithin: function (selector) {
       collect();

@@ -32,6 +32,8 @@ body {
   background-size: cover;
   background-position: center;
   transition: background-image 1.2s ease;
+  /* Never steal clicks meant for the settings gear / dock. */
+  pointer-events: none;
 }
 
 #background-layer.has-image.ken-burns {
@@ -80,12 +82,14 @@ body {
 
 .top-bar {
   position: relative;
-  z-index: 2;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 28px;
   padding: 48px 64px 0;
+  /* Keep the gear above any animated background stacking quirks. */
+  isolation: isolate;
 }
 
 .top-actions {
@@ -127,8 +131,8 @@ body {
 
 .settings-icon {
   flex: 0 0 auto;
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -148,6 +152,17 @@ body {
   backdrop-filter: blur(20px) saturate(140%);
   color: #fff;
   cursor: pointer;
+  /* Expand hit target slightly for Magic Remote pointer. */
+  position: relative;
+}
+
+.settings-icon::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  bottom: -12px;
+  left: -12px;
 }
 
 .settings-icon-glyph {
@@ -513,9 +528,15 @@ body {
   transition: box-shadow 0.15s ease;
 }
 
-/* While settings is open, hide the live launcher layers so the TV compositor
-   is not continuously re-blurring / animating the background under the panel.
-   That is the main cause of slow settings scroll redraw on webOS. */
+/*
+ * Settings open mode (webOS-safe).
+ *
+ * Screengrab1 bug: dimming the home UI with opacity + glass/backdrop-filter
+ * on steppers made the panel background fail to composite. Result: mountain
+ * wallpaper bled through the left (labels only) while right-side controls
+ * still painted. Fix = solid full-screen modal, hide underlay completely,
+ * no backdrop-filter inside settings.
+ */
 body.settings-open #background-layer,
 body.settings-open #scrim,
 body.settings-open .top-bar,
@@ -529,53 +550,107 @@ body.settings-open .music-bar {
 body.settings-open #background-layer,
 body.settings-open #background-layer.has-image.ken-burns,
 body.settings-open #background-layer.gradient-animated {
-  animation: none !important;
   filter: none !important;
   transform: none !important;
 }
 
-/* Snappy focus moves while scrolling the long settings list. */
 body.settings-open .settings-panel .focused,
 body.settings-open .settings-panel .focusable {
   transition: none !important;
 }
 
+/* Kill glass blur inside settings — it samples the (hidden) underlay and
+   leaves translucent holes on webOS. */
+body.settings-open .settings-panel,
+body.settings-open .settings-panel * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 .settings-panel {
   position: absolute;
-  top: 48px;
-  right: 120px;
-  bottom: 48px;
-  left: 120px;
-  z-index: 10;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 24px;
-  /* Fully opaque — translucent panels force continuous re-composite of the
-     launcher underneath while scrolling. */
-  background: #0c0c12;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-  /* Own compositor layer so scroll doesn't thrash the rest of the page. */
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  contain: layout style paint;
+  border-radius: 0;
+  /* Fully opaque solid fill — no alpha, no blur, no partial composite. */
+  background-color: #14141c;
+  background-image: none;
+  color: #f4f0eb;
+  border: none;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.settings-panel[hidden] {
+  display: none !important;
 }
 
 .settings-body {
   flex: 1;
   min-height: 0;
-  overflow-y: scroll;
+  overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 20px 48px 56px 40px;
+  padding: 20px 64px 64px 64px;
+  background-color: #14141c;
+  color: #f4f0eb;
   scrollbar-width: auto;
   scrollbar-color: rgba(255, 255, 255, 0.38) rgba(255, 255, 255, 0.08);
-  /* Isolate scrolling paint work to this region. */
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  will-change: scroll-position;
-  contain: layout style;
+}
+
+.settings-header {
+  background-color: #14141c;
+}
+
+.settings-loading {
+  margin-top: 32px;
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Solid (non-glass) controls inside settings so rows paint fully. */
+.settings-panel .option-stepper {
+  background: #2a2a38;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.settings-panel .settings-text,
+.settings-panel .settings-textarea,
+.settings-panel .settings-close,
+.settings-panel .settings-save,
+.settings-panel .settings-mini-btn {
+  background: #2a2a38;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f4f0eb;
+}
+
+.settings-panel .settings-row {
+  background: transparent;
+  color: #f4f0eb;
+}
+
+/* Readonly until Select — must not look disabled while D-pad focusing. */
+.settings-panel input[readonly],
+.settings-panel textarea[readonly] {
+  opacity: 1;
+  color: #f4f0eb;
+  -webkit-text-fill-color: #f4f0eb;
+  cursor: pointer;
+}
+
+.settings-panel input:not([readonly]):focus,
+.settings-panel textarea:not([readonly]):focus {
+  border-color: rgba(255, 214, 170, 0.75);
+  box-shadow: 0 0 0 2px rgba(255, 200, 150, 0.35);
 }
 
 .settings-body::-webkit-scrollbar {
@@ -601,17 +676,15 @@ body.settings-open .settings-panel .focusable {
   background-clip: padding-box;
 }
 
-.settings-panel[hidden] {
-  display: none;
-}
-
 .settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  padding: 28px 48px 20px 40px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 36px 64px 24px 64px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #14141c;
+  color: #f4f0eb;
 }
 
 .settings-header-actions {
