@@ -65,9 +65,65 @@ if (!String.prototype.padStart) {
   };
 }
 
+/**
+ * Resolve a path relative to the packaged app root (index.html directory).
+ * Older webOS WAM often breaks relative CSS/XHR URLs; absolute file:// URLs
+ * are more reliable for built-in assets.
+ */
+export function resolveAppUrl(relPath) {
+  if (!relPath) return '';
+  const path = String(relPath);
+  if (/^(https?:|data:|blob:|file:)/i.test(path)) return path;
+
+  // Absolute filesystem path (USB / app dir without scheme).
+  if (path.charAt(0) === '/') {
+    return 'file://' + path;
+  }
+
+  try {
+    if (typeof location !== 'undefined' && location.href) {
+      const href = String(location.href).split('#')[0].split('?')[0];
+      const base = href.replace(/[^/]*$/, '');
+      const cleaned = path.replace(/^\.\//, '');
+      return base + cleaned;
+    }
+  } catch (err) {
+    // Fall through.
+  }
+
+  return path;
+}
+
+/**
+ * Cache-bust packaged asset URLs so WAM does not keep a failed empty response
+ * after an update. Skips http(s)/data/blob and file:// (query strings on
+ * file:// break image decode on some webOS 4 WebKits).
+ */
+export function withAssetVersion(url, version) {
+  if (!url || !version) return url;
+  if (/^(https?:|data:|blob:|file:)/i.test(url)) return url;
+  const sep = url.indexOf('?') >= 0 ? '&' : '?';
+  return url + sep + 'v=' + encodeURIComponent(String(version));
+}
+
 export function compatFetch(url, options) {
   if (typeof fetch === 'function') {
-    return fetch(url, options);
+    return fetch(url, options).then(function (res) {
+      // Some older Chromium builds report status 0 for successful local reads.
+      if (res && res.ok) return res;
+      if (res && res.status === 0) {
+        return res.text().then(function (body) {
+          return {
+            ok: !!(body && body.length),
+            status: 0,
+            text: function () {
+              return Promise.resolve(body || '');
+            }
+          };
+        });
+      }
+      return res;
+    });
   }
 
   return new Promise(function (resolve, reject) {
@@ -77,11 +133,17 @@ export function compatFetch(url, options) {
     xhr.open(method, url, true);
 
     xhr.onload = function () {
+      const body = xhr.responseText || '';
+      // Local file:// / packaged app XHR often returns status 0 on success
+      // (classic webOS 4.x / older WebKit behaviour). Treat non-empty body as OK.
+      const ok =
+        (xhr.status >= 200 && xhr.status < 300) ||
+        (xhr.status === 0 && body.length > 0);
       resolve({
-        ok: xhr.status >= 200 && xhr.status < 300,
+        ok: ok,
         status: xhr.status,
         text: function () {
-          return Promise.resolve(xhr.responseText);
+          return Promise.resolve(body);
         }
       });
     };

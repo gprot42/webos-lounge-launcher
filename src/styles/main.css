@@ -83,19 +83,21 @@ body {
 .top-bar {
   position: relative;
   z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 28px;
-  padding: 48px 64px 0;
+  /* Fixed-height chrome so the centered clock never collides with the gear. */
+  min-height: 140px;
+  padding: 40px 64px 0;
   /* Keep the gear above any animated background stacking quirks. */
   isolation: isolate;
 }
 
 .top-actions {
+  position: absolute;
+  top: 40px;
+  right: 64px;
   display: flex;
   align-items: center;
   gap: 16px;
+  z-index: 2;
 }
 
 .settings-run-user {
@@ -190,15 +192,23 @@ body {
 }
 
 .clock-stack {
-  text-align: right;
+  /* Large centered clock — clear of the top-right settings gear. */
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  max-width: calc(100% - 220px);
 }
 
 .clock {
-  font-size: 42px;
-  font-weight: 300;
-  letter-spacing: 0.04em;
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
-  opacity: 0.85;
+  font-size: 72px;
+  font-weight: 200;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.55);
+  opacity: 0.92;
 }
 
 .clock:empty {
@@ -206,12 +216,12 @@ body {
 }
 
 .clock-date {
-  margin-top: 4px;
-  font-size: 22px;
+  margin-top: 6px;
+  font-size: 26px;
   font-weight: 300;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
 .clock-date:empty {
@@ -224,7 +234,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  height: calc(100% - 120px);
+  height: calc(100% - 140px);
   padding: 0 72px 140px;
 }
 

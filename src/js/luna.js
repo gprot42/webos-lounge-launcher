@@ -325,6 +325,9 @@ const HOME_WATCHER_APP_PATH = HOME_WATCHER_APP_DIR + '/home-watcher.sh';
 const HOME_WATCHER_ENABLE = HOME_WATCHER_APP_DIR + '/enable-home-watcher.sh';
 const HOME_WATCHER_DISABLE = HOME_WATCHER_APP_DIR + '/disable-home-watcher.sh';
 const HOME_WATCHER_PIDFILE = '/tmp/lounge-home-watcher.pid';
+const BOOT_LAUNCH_SCRIPT = HOME_WATCHER_APP_DIR + '/boot-launch.sh';
+const BOOT_LAUNCH_ENABLE = HOME_WATCHER_APP_DIR + '/enable-boot-launch.sh';
+const BOOT_LAUNCH_DISABLE = HOME_WATCHER_APP_DIR + '/disable-boot-launch.sh';
 
 /**
  * Install + start the root Home-button watcher so Home opens Lounge even when
@@ -371,6 +374,40 @@ export function isHomeWatcherRunning() {
     HOME_WATCHER_PIDFILE + '") 2>/dev/null; then echo running; else echo stopped; fi';
   return withTimeout(execRoot(cmd), 5000).then(function (res) {
     return readExecStdout(res).indexOf('running') >= 0;
+  }).catch(function () {
+    return false;
+  });
+}
+
+/**
+ * Install Homebrew init.d hook so Lounge launches after TV power-on.
+ * Requires rooted TV + Homebrew Channel startup (webosbrew init.d).
+ */
+export function enableBootLaunch() {
+  const cmd =
+    'chmod 755 "' + BOOT_LAUNCH_ENABLE + '" "' + BOOT_LAUNCH_SCRIPT +
+    '" 2>/dev/null; sh "' + BOOT_LAUNCH_ENABLE + '"';
+  return withTimeout(execRoot(cmd), 12000).then(function (res) {
+    const out = readExecStdout(res);
+    if (out.indexOf('missing_boot_script') >= 0) {
+      throw new Error('boot-launch.sh not installed on TV');
+    }
+    if (out.indexOf('enabled') < 0) {
+      throw new Error(out || 'boot launch failed to install');
+    }
+    return true;
+  });
+}
+
+/**
+ * Remove the boot-on-start init.d hook.
+ */
+export function disableBootLaunch() {
+  const cmd =
+    'chmod 755 "' + BOOT_LAUNCH_DISABLE + '" 2>/dev/null; sh "' +
+    BOOT_LAUNCH_DISABLE + '"';
+  return withTimeout(execRoot(cmd), 8000).then(function () {
+    return true;
   }).catch(function () {
     return false;
   });

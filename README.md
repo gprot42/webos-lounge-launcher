@@ -9,17 +9,39 @@ A fullscreen home screen for rooted LG webOS TVs. Pick an app, switch inputs, an
 ## Features
 
 - App grid with pinned streaming apps, plus custom app tiles (pin any installed app by App ID with a bundled icon)
-- HDMI and TV input shortcuts with custom labels
+- HDMI and TV input shortcuts with custom labels (uncheck all inputs to hide the row entirely)
 - Scenic backgrounds and built-in ambient music that keeps playing while settings are open
-- Clock with optional date, both independently toggleable
+- Large centered clock with optional date, both independently toggleable
 - Volume bar that mirrors the TV's remote volume changes
 - Adjustable icon size and left/center/right icon alignment
 - Dedicated app settings button and a TV Settings tile for quick access to system settings
+- **Launch on Home button** — root watcher reopens Lounge when stock Home appears
+- **Boot on TV start** — root init.d script launches Lounge after power-on
 - Remote-friendly navigation
 
 ## Compatibility
 
-Tested and working on the LG OLED55C56LB running webOS 25.
+| webOS version | Status | Notes |
+| --- | --- | --- |
+| webOS 25 (sdk ~10) | Working | Primary test platform — LG OLED55C56LB |
+| webOS 6–9 / 22–24 | Expected working | Same Luna APIs as 25; not fully regression-tested here |
+| webOS 5.x | Expected working | Use project-local `@webos-tools/cli` for packaging (epoch tar fix) |
+| webOS 4.x | Working (reported) | Home watcher + boot-on-start use webOS 4–safe `luna-send` fallbacks; backgrounds viewable on device (see below) |
+| webOS 3.x and older | Untested | May need extra Luna / shell quirks |
+
+**Requirements:** rooted TV with [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) and SSH. Root elevation is required for full app scanning, Home-button intercept, and boot-on-start.
+
+### webOS 4.x notes
+
+- **Background JPEGs on device.** Built-in scenic images ship inside the app package. On webOS 4 you can browse them directly under:
+
+  ```text
+  /media/developer/apps/usr/palm/applications/org.webosbrew.lounge.launcher/assets/backgrounds/
+  ```
+
+  (Some file managers list this as `…/assets/background`.)
+
+- **Home button / Boot on start.** Both install hooks under `/var/lib/webosbrew/init.d/` via the elevated Homebrew Channel service. Toggle the setting **off → Save → on → Save** after an update if either stops working. Confirm Homebrew startup is installed (see [Running elevated as root](#running-elevated-as-root-required-for-app-scanning)).
 
 ## Install
 
@@ -52,6 +74,9 @@ built-in **Scan for apps** feature returns nothing unless the launcher runs with
 elevated (root) Luna privileges. On a rooted TV that elevation is provided by the
 [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) root
 service (`luna://org.webosbrew.hbchannel.service/exec`), which executes as root.
+
+Home-button intercept and Boot on TV start use the same root service to install
+`/var/lib/webosbrew/init.d/` hooks.
 
 ### 1. Elevate (grants root)
 

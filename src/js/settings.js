@@ -884,13 +884,13 @@ export function createSettingsPanel(panel, getConfig, options) {
 
     const bootHint = document.createElement('p');
     bootHint.className = 'settings-hint';
-    bootHint.textContent = 'Boot on start requires the Homebrew Autostart app or a root init.d script. This setting records your preference.';
+    bootHint.textContent = 'When enabled, a root init.d script launches Lounge after the TV powers on. Requires rooted TV + Homebrew Channel (same as Home button). A short delay on boot is normal while webOS starts.';
     launcherSection.appendChild(bootHint);
     body.appendChild(launcherSection);
 
     const inputsSection = document.createElement('section');
     inputsSection.className = 'settings-section';
-    inputsSection.innerHTML = '<h3>Inputs</h3><p class="settings-hint">Choose which inputs appear and set custom labels.</p>';
+    inputsSection.innerHTML = '<h3>Inputs</h3><p class="settings-hint">Choose which inputs appear and set custom labels. Uncheck all to hide the input row entirely.</p>';
 
     const inputsList = document.createElement('div');
     inputsList.className = 'settings-inputs';
@@ -1141,7 +1141,7 @@ export function createSettingsPanel(panel, getConfig, options) {
       if (config.launcher.launchOnHome && options.onToast) {
         options.onToast('Enabling Home → Lounge watcher…');
       } else if (config.launcher.bootOnStart && options.onToast) {
-        options.onToast('Boot on start saved — enable Homebrew Autostart on your TV');
+        options.onToast('Enabling boot on TV start…');
       }
       hide();
     });
@@ -1202,7 +1202,8 @@ export function createSettingsPanel(panel, getConfig, options) {
       if (labelInput.value.trim()) labels[inputId] = labelInput.value.trim();
     });
 
-    config.launcher.inputs = allowed.length ? allowed : DEFAULT_INPUTS.slice();
+    // Empty array is intentional ("show no inputs"). Do not fall back to defaults.
+    config.launcher.inputs = allowed;
     config.launcher.inputLabels = labels;
   }
 

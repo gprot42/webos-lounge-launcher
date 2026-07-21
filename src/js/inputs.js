@@ -17,8 +17,14 @@ export function createInputRow(container, getConfig, options) {
 
   function isConfigured(device) {
     const config = getConfig();
-    const allowed = (config.launcher && config.launcher.inputs) || [];
-    if (!allowed.length) return true;
+    // Explicit empty array means "hide all inputs". Only fall back to "show all"
+    // when the key is missing (undefined/null) — never when the user cleared every
+    // checkbox.
+    if (!config.launcher || !Object.prototype.hasOwnProperty.call(config.launcher, 'inputs')) {
+      return true;
+    }
+    const allowed = config.launcher.inputs;
+    if (!Array.isArray(allowed) || !allowed.length) return false;
 
     if (allowed.indexOf(device.id) >= 0) return true;
 

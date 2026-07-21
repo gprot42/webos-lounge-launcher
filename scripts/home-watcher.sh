@@ -8,6 +8,9 @@
 #
 # Start detached only:
 #   setsid nohup home-watcher.sh >/tmp/lounge-home-watcher.log 2>&1 </dev/null &
+#
+# Hardened for webOS 4.x+: luna-send -w / setsid may be missing; subscribe can
+# die after boot; we fall back to polling and auto-restart the subscribe loop.
 
 APP_ID="org.webosbrew.lounge.launcher"
 PIDFILE="/tmp/lounge-home-watcher.pid"
@@ -44,28 +47,57 @@ is_home() {
 }
 
 extract_app_id() {
-  printf '%s' "$1" | tr '\n' ' ' | sed -n 's/.*"appId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+  # Prefer top-level "appId"; fall back to foregroundAppInfo[0].appId (some
+  # older webOS builds only fill the array form).
+  raw=$(printf '%s' "$1" | tr '\n' ' ')
+  id=$(printf '%s' "$raw" | sed -n 's/.*"appId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+  if [ -n "$id" ]; then
+    printf '%s' "$id"
+    return 0
+  fi
+  printf '%s' "$raw" | sed -n 's/.*"foregroundAppInfo"[^[]*\[[^]{]*{[^}]*"appId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+# One-shot luna-send with webOS 4-compatible fallbacks (-w / -i may be missing).
+luna_once() {
+  uri=$1
+  payload=$2
+  out=$(luna-send -i -n 1 -w 3000 -f "$uri" "$payload" 2>/dev/null) && {
+    printf '%s' "$out"
+    return 0
+  }
+  out=$(luna-send -i -n 1 -f "$uri" "$payload" 2>/dev/null) && {
+    printf '%s' "$out"
+    return 0
+  }
+  out=$(luna-send -n 1 -f "$uri" "$payload" 2>/dev/null) && {
+    printf '%s' "$out"
+    return 0
+  }
+  return 1
 }
 
 subscribe_fg() {
-  luna-send -i \
+  # Prefer interactive subscribe; fall back if -i is unavailable.
+  if luna-send -i \
+    'luna://com.webos.applicationManager/getForegroundAppInfo' \
+    '{"subscribe":true}' 2>/dev/null; then
+    return 0
+  fi
+  luna-send \
     'luna://com.webos.applicationManager/getForegroundAppInfo' \
     '{"subscribe":true}' 2>/dev/null
 }
 
 launch_lounge() {
   log "launch $APP_ID"
-  luna-send -i -n 1 -w 3000 -f \
-    'luna://com.webos.applicationManager/launch' \
-    "{\"id\":\"${APP_ID}\"}" >>"$LOG" 2>&1
+  luna_once 'luna://com.webos.applicationManager/launch' "{\"id\":\"${APP_ID}\"}" >>"$LOG" 2>&1 || true
 }
 
 close_home() {
   for id in com.webos.app.home com.webos.app.launcher com.webos.app.homelauncher \
             com.webos.app.dashboard com.palm.app.home; do
-    luna-send -i -n 1 -w 1500 -f \
-      'luna://com.webos.applicationManager/closeByAppId' \
-      "{\"id\":\"${id}\"}" >/dev/null 2>&1
+    luna_once 'luna://com.webos.applicationManager/closeByAppId' "{\"id\":\"${id}\"}" >/dev/null 2>&1 || true
   done
 }
 
@@ -142,16 +174,27 @@ run_subscribe() {
   return 0
 }
 
+# Wait briefly for LS2 after cold boot (webOS 4 init.d can start us early).
+boot_wait=0
+while [ "$boot_wait" -lt 30 ]; do
+  probe=$(luna_once 'luna://com.webos.applicationManager/getForegroundAppInfo' '{"subscribe":true}' 2>/dev/null)
+  if [ -n "$probe" ]; then
+    log "ls2 ready after ${boot_wait}s"
+    break
+  fi
+  boot_wait=$((boot_wait + 1))
+  sleep 1
+done
+
 while true; do
   run_subscribe
   sleep 0.5
+  # Polling fallback while subscribe is down / between restarts.
   i=0
-  while [ "$i" -lt 15 ]; do
-    raw=$(luna-send -i -n 1 -w 2000 \
-      'luna://com.webos.applicationManager/getForegroundAppInfo' \
-      '{"subscribe":true}' 2>/dev/null)
+  while [ "$i" -lt 20 ]; do
+    raw=$(luna_once 'luna://com.webos.applicationManager/getForegroundAppInfo' '{"subscribe":true}')
     handle_fg "$(extract_app_id "$raw")"
     i=$((i + 1))
-    sleep 0.4
+    sleep 0.5
   done
 done

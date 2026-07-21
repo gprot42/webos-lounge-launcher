@@ -59,8 +59,15 @@ async function build() {
   copyRecursive(path.join(root, 'assets'), path.join(dist, 'assets'));
   fs.copyFileSync(path.join(root, 'version.md'), path.join(dist, 'version.md'));
 
-  // Root Home-button watcher + enable/disable helpers (started via settings / init.d).
-  ['home-watcher.sh', 'enable-home-watcher.sh', 'disable-home-watcher.sh'].forEach(function (name) {
+  // Root Home-button watcher + boot-on-start helpers (started via settings / init.d).
+  [
+    'home-watcher.sh',
+    'enable-home-watcher.sh',
+    'disable-home-watcher.sh',
+    'boot-launch.sh',
+    'enable-boot-launch.sh',
+    'disable-boot-launch.sh'
+  ].forEach(function (name) {
     const src = path.join(root, 'scripts', name);
     if (fs.existsSync(src)) {
       const dest = path.join(dist, name);

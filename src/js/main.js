@@ -15,7 +15,9 @@ import {
   listApps,
   closeApp,
   enableHomeWatcher,
-  disableHomeWatcher
+  disableHomeWatcher,
+  enableBootLaunch,
+  disableBootLaunch
 } from './luna.js';
 import {isHomeApp} from './remote.js';
 import {isTerminalAppId, getAppIdCandidates} from './app-icons.js';
@@ -78,7 +80,8 @@ const music = createMusicPlayer(getConfig, Object.assign({}, elements, {onToast:
 const inputs = createInputRow(elements.inputRow, getConfig, {onToast: showToast});
 function syncHomeWatcher(config, opts) {
   const quiet = opts && opts.quiet;
-  const on = !!(config && config.launcher && config.launcher.launchOnHome);
+  const on = !!(config && config.launcher &&
+    (config.launcher.launchOnHome || config.launcher.returnOnAppExit));
   const apply = on ? enableHomeWatcher : disableHomeWatcher;
   return apply().then(function () {
     if (on && !quiet) showToast('Home button → Lounge is active');
@@ -94,6 +97,31 @@ function syncHomeWatcher(config, opts) {
   });
 }
 
+function syncBootLaunch(config, opts) {
+  const quiet = opts && opts.quiet;
+  const on = !!(config && config.launcher && config.launcher.bootOnStart);
+  const apply = on ? enableBootLaunch : disableBootLaunch;
+  return apply().then(function () {
+    if (on && !quiet) showToast('Boot on TV start is active');
+  }).catch(function (err) {
+    console.error(err);
+    if (on) {
+      const detail = err && err.message ? String(err.message) : '';
+      const short = detail.replace(/\s+/g, ' ').slice(0, 90);
+      showToast(short
+        ? 'Boot on start failed: ' + short
+        : 'Boot on start failed — check root / Homebrew Channel');
+    }
+  });
+}
+
+function syncRootHooks(config, opts) {
+  return Promise.all([
+    syncHomeWatcher(config, opts),
+    syncBootLaunch(config, opts)
+  ]);
+}
+
 const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
   onOpen: function () {
     music.fadeInAndResume();
@@ -107,7 +135,7 @@ const settings = createSettingsPanel(elements.settingsPanel, getBaseConfig, {
   onSave: function (savedConfig) {
     setConfig(savedConfig);
     refreshAll();
-    syncHomeWatcher(savedConfig);
+    syncRootHooks(savedConfig);
   },
   onClose: function () {
     focus.refresh();
@@ -570,10 +598,12 @@ async function init() {
   window.addEventListener('pagehide', handlePowerOff);
   startForegroundWatcher();
 
-  // Re-assert the root Home watcher if the user previously enabled it. The
-  // watcher must be re-detached after every install (hbchannel kills orphans).
-  if (shouldInterceptHome(getBaseConfig().launcher)) {
-    syncHomeWatcher(getBaseConfig(), {quiet: true}).catch(function () { /* ignore */ });
+  // Re-assert root hooks if the user previously enabled them. The home watcher
+  // and boot-launch init.d must be re-written after every install (ipk replace
+  // drops scripts; hbchannel may kill orphan processes).
+  const cfg = getBaseConfig();
+  if (shouldInterceptHome(cfg.launcher) || (cfg.launcher && cfg.launcher.bootOnStart)) {
+    syncRootHooks(cfg, {quiet: true}).catch(function () { /* ignore */ });
   }
 }
 
