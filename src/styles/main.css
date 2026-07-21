@@ -192,18 +192,40 @@ body {
 }
 
 .clock-stack {
-  /* Large centered clock — clear of the top-right settings gear. */
   position: absolute;
-  left: 50%;
   top: 36px;
-  transform: translateX(-50%);
-  text-align: center;
   pointer-events: none;
+  z-index: 1;
   max-width: calc(100% - 220px);
 }
 
+/* Position — driven by body.clock-left / .clock-center / .clock-right */
+body.clock-center .clock-stack,
+.clock-stack {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+body.clock-left .clock-stack {
+  left: 64px;
+  right: auto;
+  transform: none;
+  text-align: left;
+  max-width: calc(100% - 280px);
+}
+
+body.clock-right .clock-stack {
+  /* Sit left of the settings gear so they never overlap. */
+  left: auto;
+  right: 160px;
+  transform: none;
+  text-align: right;
+  max-width: calc(100% - 280px);
+}
+
 .clock {
-  font-size: 72px;
   font-weight: 200;
   letter-spacing: 0.06em;
   line-height: 1.05;
@@ -217,7 +239,6 @@ body {
 
 .clock-date {
   margin-top: 6px;
-  font-size: 26px;
   font-weight: 300;
   letter-spacing: 0.08em;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
@@ -226,6 +247,39 @@ body {
 
 .clock-date:empty {
   display: none;
+}
+
+/* Size — driven by body.clock-size-small / medium / large */
+body.clock-size-small .clock {
+  font-size: 36px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+}
+
+body.clock-size-small .clock-date {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+body.clock-size-medium .clock {
+  font-size: 52px;
+  font-weight: 250;
+  letter-spacing: 0.05em;
+}
+
+body.clock-size-medium .clock-date {
+  font-size: 22px;
+  margin-top: 4px;
+}
+
+body.clock-size-large .clock,
+body:not(.clock-size-small):not(.clock-size-medium) .clock {
+  font-size: 72px;
+}
+
+body.clock-size-large .clock-date,
+body:not(.clock-size-small):not(.clock-size-medium) .clock-date {
+  font-size: 26px;
 }
 
 .launcher {

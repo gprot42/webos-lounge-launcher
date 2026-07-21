@@ -42,6 +42,10 @@ export const DEFAULT_CONFIG = {
     inputLabels: {},
     showClock: true,
     showDate: true,
+    // Clock placement: left | center | right (top bar; right leaves room for the gear).
+    clockAlign: 'center',
+    // Clock type size: small | medium | large.
+    clockSize: 'large',
     timezone: '',
     iconSize: 'medium',
     iconAlign: 'center',

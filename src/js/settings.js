@@ -818,6 +818,20 @@ export function createSettingsPanel(panel, getConfig, options) {
     showDateToggle.dataset.focusIndex = '9195';
     launcherSection.appendChild(labeledControl('Show date', showDateToggle));
 
+    const clockAlignSelect = createOptionStepper('', 9196, [
+      {value: 'left', label: 'Top left'},
+      {value: 'center', label: 'Centre'},
+      {value: 'right', label: 'Top right'}
+    ], config.launcher.clockAlign || 'center');
+    launcherSection.appendChild(labeledControl('Clock position', clockAlignSelect));
+
+    const clockSizeSelect = createOptionStepper('', 9197, [
+      {value: 'small', label: 'Small'},
+      {value: 'medium', label: 'Medium'},
+      {value: 'large', label: 'Large'}
+    ], config.launcher.clockSize || 'large');
+    launcherSection.appendChild(labeledControl('Clock size', clockSizeSelect));
+
     const timezoneSelect = createOptionStepper('', 920,
       TIMEZONE_OPTIONS.map(function (option) {
         return {value: option.value, label: option.label};
@@ -1121,6 +1135,8 @@ export function createSettingsPanel(panel, getConfig, options) {
 
       config.launcher.showClock = showClockToggle.checked;
       config.launcher.showDate = showDateToggle.checked;
+      config.launcher.clockAlign = clockAlignSelect.value || 'center';
+      config.launcher.clockSize = clockSizeSelect.value || 'large';
       config.launcher.timezone = timezoneSelect.value;
       config.launcher.iconSize = iconSizeSelect.value;
       config.launcher.iconAlign = iconAlignSelect.value;

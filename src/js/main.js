@@ -262,10 +262,28 @@ function formatClockDate(date, timezone) {
   }
 }
 
+function applyClockStyle() {
+  const launcher = (getConfig().launcher) || {};
+  const align = launcher.clockAlign === 'left' || launcher.clockAlign === 'right'
+    ? launcher.clockAlign
+    : 'center';
+  const size = launcher.clockSize === 'small' || launcher.clockSize === 'medium'
+    ? launcher.clockSize
+    : 'large';
+
+  document.body.classList.remove('clock-left', 'clock-center', 'clock-right');
+  document.body.classList.add('clock-' + align);
+
+  document.body.classList.remove('clock-size-small', 'clock-size-medium', 'clock-size-large');
+  document.body.classList.add('clock-size-' + size);
+}
+
 function updateClock() {
   const config = getConfig();
   const launcher = config.launcher || {};
   const now = new Date();
+
+  applyClockStyle();
 
   if (launcher.showClock) {
     elements.clock.textContent = formatClockTime(now, launcher.timezone || '');
